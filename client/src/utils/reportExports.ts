@@ -58,44 +58,50 @@ export const exportToPDF = (data: ReportData, dateRange: string, reportType: str
 
   // Header with gradient effect (simulated with rectangles)
   doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.rect(0, 0, 210, 40, 'F');
+  doc.rect(0, 0, 210, 45, 'F');
   
-  // Add library logo/icon (simulated with a circle)
+  // Add a more sophisticated library logo
   doc.setFillColor(255, 255, 255);
-  doc.circle(25, 20, 8, 'F');
+  doc.circle(25, 22, 10, 'F');
+  
+  // Create a book icon using rectangles and lines
   doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.setFontSize(12);
-  doc.text('📚', 21, 24);
+  doc.rect(19, 17, 12, 10, 'F'); // Book body
+  doc.setFillColor(255, 255, 255);
+  doc.rect(20, 18, 10, 1, 'F'); // Book lines
+  doc.rect(20, 20, 10, 1, 'F');
+  doc.rect(20, 22, 10, 1, 'F');
+  doc.rect(20, 24, 10, 1, 'F');
 
-  // Title
+  // Title with better positioning
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
-  doc.text('Library Management System', 45, 20);
+  doc.text('Library Management System', 45, 22);
   
   doc.setFontSize(16);
   doc.setFont('helvetica', 'normal');
-  doc.text('Analytics Report', 45, 30);
+  doc.text('Analytics Report', 45, 32);
 
-  // Report metadata
+  // Report metadata with better spacing
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
   doc.setFontSize(10);
-  doc.text(`Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1)}`, 14, 55);
-  doc.text(`Date Range: ${dateRange.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}`, 14, 62);
-  doc.text(`Generated: ${formattedDate} at ${formattedTime}`, 14, 69);
+  doc.text(`Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1)}`, 14, 60);
+  doc.text(`Date Range: ${dateRange.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}`, 14, 67);
+  doc.text(`Generated: ${formattedDate} at ${formattedTime}`, 14, 74);
 
-  let yPosition = 85;
+  let yPosition = 90;
 
-  // Key Metrics Section
+  // Key Metrics Section with proper icon
   doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
   doc.rect(14, yPosition - 5, 182, 8, 'F');
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  doc.text('📊 Key Metrics', 18, yPosition);
+  doc.text('Key Metrics', 18, yPosition);
   yPosition += 15;
 
-  // Metrics in a grid layout
+  // Metrics in a grid layout with better alignment
   const metrics = [
     { label: 'Total Users', value: data.totalUsers.toString(), change: `+${data.newUsersThisMonth} this month` },
     { label: 'Total Books', value: data.totalBooks.toString(), change: `+${data.booksAddedThisMonth} this month` },
@@ -107,10 +113,11 @@ export const exportToPDF = (data: ReportData, dateRange: string, reportType: str
     const x = 14 + (index % 2) * 90;
     const y = yPosition + Math.floor(index / 2) * 25;
     
-    // Metric box
+    // Metric box with better styling
     doc.setFillColor(255, 255, 255);
     doc.rect(x, y - 5, 85, 20, 'F');
     doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.5);
     doc.rect(x, y - 5, 85, 20, 'S');
     
     doc.setFontSize(10);
@@ -137,7 +144,7 @@ export const exportToPDF = (data: ReportData, dateRange: string, reportType: str
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  doc.text('📚 Popular Genres', 18, yPosition);
+  doc.text('Popular Genres', 18, yPosition);
   yPosition += 15;
 
   data.popularGenres.forEach((genre, index) => {
@@ -180,7 +187,7 @@ export const exportToPDF = (data: ReportData, dateRange: string, reportType: str
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  doc.text('🏆 Top Borrowers', 18, yPosition);
+  doc.text('Top Borrowers', 18, yPosition);
   yPosition += 15;
 
   autoTable(doc, {
@@ -196,14 +203,23 @@ export const exportToPDF = (data: ReportData, dateRange: string, reportType: str
     headStyles: {
       fillColor: primaryColor,
       textColor: [255, 255, 255],
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      fontSize: 10,
+      halign: 'center'
     },
     alternateRowStyles: {
       fillColor: [249, 250, 251]
     },
     styles: {
       fontSize: 10,
-      cellPadding: 5
+      cellPadding: 5,
+      halign: 'center'
+    },
+    columnStyles: {
+      0: { cellWidth: 30, halign: 'center' },
+      1: { cellWidth: 60, halign: 'left' },
+      2: { cellWidth: 40, halign: 'center' },
+      3: { cellWidth: 40, halign: 'center' }
     }
   });
 
@@ -215,12 +231,12 @@ export const exportToPDF = (data: ReportData, dateRange: string, reportType: str
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(textColor[0], textColor[1], textColor[2]);
-  doc.text('⭐ Most Issued Books', 18, yPosition);
+  doc.text('Most Issued Books', 18, yPosition);
   yPosition += 15;
 
   autoTable(doc, {
     startY: yPosition,
-    head: [['Title', 'Author', 'Genre', 'Issue Count']],
+    head: [['Title', 'Author', 'Genre', 'Issues']],
     body: data.mostIssuedBooks.map(book => [
       book.title,
       book.author,
@@ -231,29 +247,87 @@ export const exportToPDF = (data: ReportData, dateRange: string, reportType: str
     headStyles: {
       fillColor: secondaryColor,
       textColor: [255, 255, 255],
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      fontSize: 10,
+      halign: 'center'
+    },
+    alternateRowStyles: {
+      fillColor: [249, 250, 251]
+    },
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      halign: 'left'
+    },
+    columnStyles: {
+      0: { cellWidth: 70, halign: 'left' },
+      1: { cellWidth: 50, halign: 'left' },
+      2: { cellWidth: 35, halign: 'center' },
+      3: { cellWidth: 25, halign: 'center' }
+    }
+  });
+
+  // Weekly Trends Chart (simplified as text)
+  yPosition = (doc as any).lastAutoTable.finalY + 20;
+  
+  if (yPosition > 250) {
+    doc.addPage();
+    yPosition = 20;
+  }
+
+  doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
+  doc.rect(14, yPosition - 5, 182, 8, 'F');
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+  doc.text('Weekly Circulation Trends', 18, yPosition);
+  yPosition += 15;
+
+  autoTable(doc, {
+    startY: yPosition,
+    head: [['Day', 'Issues', 'Returns', 'Net Change']],
+    body: data.weeklyTrends.map(day => [
+      day.day,
+      day.issues.toString(),
+      day.returns.toString(),
+      (day.issues - day.returns).toString()
+    ]),
+    theme: 'grid',
+    headStyles: {
+      fillColor: [139, 92, 246], // Purple
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 10,
+      halign: 'center'
     },
     alternateRowStyles: {
       fillColor: [249, 250, 251]
     },
     styles: {
       fontSize: 10,
-      cellPadding: 5
+      cellPadding: 5,
+      halign: 'center'
     },
     columnStyles: {
-      0: { cellWidth: 60 },
-      1: { cellWidth: 50 },
-      2: { cellWidth: 40 },
-      3: { cellWidth: 30 }
+      0: { cellWidth: 40, halign: 'center' },
+      1: { cellWidth: 40, halign: 'center' },
+      2: { cellWidth: 40, halign: 'center' },
+      3: { cellWidth: 40, halign: 'center' }
     }
   });
 
-  // Footer
+  // Footer with better formatting
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(107, 114, 128);
+    
+    // Add a line above footer
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.5);
+    doc.line(14, 280, 196, 280);
+    
     doc.text(`Page ${i} of ${pageCount}`, 14, 285);
     doc.text('Generated by Library Management System', 105, 285, { align: 'center' });
     doc.text(`© ${new Date().getFullYear()} Library Management`, 196, 285, { align: 'right' });
@@ -305,7 +379,7 @@ export const exportToCSV = (data: ReportData, dateRange: string, reportType: str
   csvContent += `TOP BORROWERS\n`;
   csvContent += `Rank,Name,USN,Books Borrowed\n`;
   data.topBorrowers.forEach((borrower, index) => {
-    csvContent += `${index + 1},${borrower.name},${borrower.usn},${borrower.books}\n`;
+    csvContent += `${index + 1},"${borrower.name}",${borrower.usn},${borrower.books}\n`;
   });
   csvContent += `\n`;
 
@@ -319,17 +393,17 @@ export const exportToCSV = (data: ReportData, dateRange: string, reportType: str
 
   // Weekly Trends
   csvContent += `WEEKLY CIRCULATION TRENDS\n`;
-  csvContent += `Day,Issues,Returns\n`;
+  csvContent += `Day,Issues,Returns,Net Change\n`;
   data.weeklyTrends.forEach(day => {
-    csvContent += `${day.day},${day.issues},${day.returns}\n`;
+    csvContent += `${day.day},${day.issues},${day.returns},${day.issues - day.returns}\n`;
   });
   csvContent += `\n`;
 
   // Monthly Issues
   csvContent += `MONTHLY CIRCULATION\n`;
-  csvContent += `Month,Issues,Returns\n`;
+  csvContent += `Month,Issues,Returns,Net Change\n`;
   data.monthlyIssues.forEach(month => {
-    csvContent += `${month.month},${month.issues},${month.returns}\n`;
+    csvContent += `${month.month},${month.issues},${month.returns},${month.issues - month.returns}\n`;
   });
 
   // Create and download the file
