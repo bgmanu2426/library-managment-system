@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { exportToPDF, exportToCSV, ReportData } from '../../utils/reportExports';
 import { 
   BarChart3, 
   Download, 
@@ -12,12 +13,15 @@ import {
   AlertTriangle,
   Award,
   Star,
-  Target
+  Target,
+  Loader2
 } from 'lucide-react';
 
 const Reports: React.FC = () => {
   const [dateRange, setDateRange] = useState('last30days');
   const [reportType, setReportType] = useState('overview');
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
 
   const mockStats = {
     totalUsers: 150,
@@ -65,14 +69,62 @@ const Reports: React.FC = () => {
     ]
   };
 
-  const exportToPDF = () => {
-    console.log('Exporting to PDF...');
-    alert('PDF export would be implemented here');
+  const handleExportToPDF = async () => {
+    setIsExportingPDF(true);
+    try {
+      // Add a small delay to show the loading state
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const reportData: ReportData = {
+        totalUsers: mockStats.totalUsers,
+        totalBooks: mockStats.totalBooks,
+        issuedBooks: mockStats.issuedBooks,
+        overdueBooks: mockStats.overdueBooks,
+        newUsersThisMonth: mockStats.newUsersThisMonth,
+        booksAddedThisMonth: mockStats.booksAddedThisMonth,
+        popularGenres: mockStats.popularGenres,
+        monthlyIssues: mockStats.monthlyIssues,
+        topBorrowers: mockStats.topBorrowers,
+        mostIssuedBooks: mockStats.mostIssuedBooks,
+        weeklyTrends: mockStats.weeklyTrends
+      };
+      
+      exportToPDF(reportData, dateRange, reportType);
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      alert('Error generating PDF report. Please try again.');
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
-  const exportToCSV = () => {
-    console.log('Exporting to CSV...');
-    alert('CSV export would be implemented here');
+  const handleExportToCSV = async () => {
+    setIsExportingCSV(true);
+    try {
+      // Add a small delay to show the loading state
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const reportData: ReportData = {
+        totalUsers: mockStats.totalUsers,
+        totalBooks: mockStats.totalBooks,
+        issuedBooks: mockStats.issuedBooks,
+        overdueBooks: mockStats.overdueBooks,
+        newUsersThisMonth: mockStats.newUsersThisMonth,
+        booksAddedThisMonth: mockStats.booksAddedThisMonth,
+        popularGenres: mockStats.popularGenres,
+        monthlyIssues: mockStats.monthlyIssues,
+        topBorrowers: mockStats.topBorrowers,
+        mostIssuedBooks: mockStats.mostIssuedBooks,
+        weeklyTrends: mockStats.weeklyTrends
+      };
+      
+      exportToCSV(reportData, dateRange, reportType);
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      alert('Error generating CSV report. Please try again.');
+    } finally {
+      setIsExportingCSV(false);
+    }
   };
 
   const getBarHeight = (value: number, maxValue: number) => {
@@ -136,21 +188,54 @@ const Reports: React.FC = () => {
           </div>
 
           {/* Export Buttons */}
-          <div className="flex space-x-3">
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
             <button
-              onClick={exportToPDF}
-              className="flex items-center space-x-2 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors duration-200"
+              onClick={handleExportToPDF}
+              disabled={isExportingPDF}
+              className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
-              <FileText className="w-5 h-5" />
-              <span>Export PDF</span>
+              {isExportingPDF ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <FileText className="w-5 h-5" />
+              )}
+              <span>{isExportingPDF ? 'Generating...' : 'Export PDF'}</span>
             </button>
             <button
-              onClick={exportToCSV}
-              className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-3 rounded-lg hover:bg-emerald-700 transition-colors duration-200"
+              onClick={handleExportToCSV}
+              disabled={isExportingCSV}
+              className="flex items-center justify-center space-x-2 bg-emerald-600 text-white px-4 py-3 rounded-lg hover:bg-emerald-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
-              <Download className="w-5 h-5" />
-              <span>Export CSV</span>
+              {isExportingCSV ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              <span>{isExportingCSV ? 'Generating...' : 'Export CSV'}</span>
             </button>
+          </div>
+        </div>
+        
+        {/* Export Info */}
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <FileText className="w-4 h-4 text-blue-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-blue-900 mb-1">Export Information</h4>
+              <p className="text-sm text-blue-700">
+                <strong>PDF:</strong> Comprehensive report with charts, tables, and visual analytics. Perfect for presentations and formal documentation.
+              </p>
+              <p className="text-sm text-blue-700 mt-1">
+                <strong>CSV:</strong> Raw data export for further analysis in spreadsheet applications or data processing tools.
+              </p>
+              <p className="text-xs text-blue-600 mt-2">
+                📅 Reports include generation timestamp and selected date range for reference.
+              </p>
+            </div>
           </div>
         </div>
       </div>
