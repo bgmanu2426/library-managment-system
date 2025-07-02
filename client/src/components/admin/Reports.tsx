@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { exportToPDF, exportToCSV, ReportData } from '../../utils/reportExports';
-import { 
-  BarChart3, 
-  Download, 
-  FileText, 
+import React, { useState, useEffect } from 'react';
+import {
+  BarChart3,
+  Download,
+  FileText,
   Calendar,
   Users,
   BookOpen,
@@ -14,524 +13,794 @@ import {
   Award,
   Star,
   Target,
-  Loader2
+  Loader2,
+  RefreshCw,
+  Loader,
+  Search
 } from 'lucide-react';
+import { 
+  getUserActivityReport,
+  getBookCirculationReport, 
+  getOverdueSummaryReport,
+  getInventoryStatusReport,
+  exportReportExcel,
+  exportReportPDF
+} from '../../utils/api';
+import {
+  UserActivityReport,
+  BookCirculationReport,
+  OverdueSummaryReport,
+  InventoryStatusReport
+} from '../../types';
+import { useAuth } from '../../context/AuthContext';
 
 const Reports: React.FC = () => {
-  const [dateRange, setDateRange] = useState('last30days');
-  const [reportType, setReportType] = useState('overview');
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
-  const [isExportingCSV, setIsExportingCSV] = useState(false);
+  const auth = useAuth();
 
-  const mockStats = {
-    totalUsers: 150,
-    totalBooks: 1250,
-    issuedBooks: 89,
-    overdueBooks: 12,
-    newUsersThisMonth: 15,
-    booksAddedThisMonth: 45,
-    popularGenres: [
-      { name: 'Computer Science', count: 35, percentage: 40 },
-      { name: 'Mathematics', count: 25, percentage: 28 },
-      { name: 'Physics', count: 15, percentage: 17 },
-      { name: 'Literature', count: 14, percentage: 15 }
-    ],
-    monthlyIssues: [
-      { month: 'Jan', issues: 45, returns: 42 },
-      { month: 'Feb', issues: 52, returns: 48 },
-      { month: 'Mar', issues: 38, returns: 41 },
-      { month: 'Apr', issues: 61, returns: 58 },
-      { month: 'May', issues: 71, returns: 65 }
-    ],
-    topBorrowers: [
-      { name: 'John Doe', usn: 'CS21001', books: 8, avatar: 'JD' },
-      { name: 'Jane Smith', usn: 'CS21002', books: 6, avatar: 'JS' },
-      { name: 'Alice Johnson', usn: 'CS21003', books: 5, avatar: 'AJ' },
-      { name: 'Bob Wilson', usn: 'CS21004', books: 4, avatar: 'BW' },
-      { name: 'Carol Davis', usn: 'CS21005', books: 4, avatar: 'CD' }
-    ],
-    mostIssuedBooks: [
-      { title: 'Introduction to Algorithms', author: 'Thomas H. Cormen', issueCount: 15, genre: 'Computer Science' },
-      { title: 'JavaScript: The Good Parts', author: 'Douglas Crockford', issueCount: 12, genre: 'Programming' },
-      { title: 'Clean Code', author: 'Robert C. Martin', issueCount: 10, genre: 'Software Engineering' },
-      { title: 'Calculus and Analytic Geometry', author: 'George B. Thomas', issueCount: 8, genre: 'Mathematics' },
-      { title: 'Principles of Physics', author: 'David Halliday', issueCount: 7, genre: 'Physics' },
-      { title: 'Linear Algebra', author: 'Gilbert Strang', issueCount: 6, genre: 'Mathematics' }
-    ],
-    weeklyTrends: [
-      { day: 'Mon', issues: 12, returns: 8 },
-      { day: 'Tue', issues: 15, returns: 11 },
-      { day: 'Wed', issues: 18, returns: 14 },
-      { day: 'Thu', issues: 22, returns: 16 },
-      { day: 'Fri', issues: 25, returns: 20 },
-      { day: 'Sat', issues: 8, returns: 12 },
-      { day: 'Sun', issues: 5, returns: 9 }
-    ]
-  };
+  // State management
+  const [reportType, setReportType] = useState<'user-activity' | 'book-circulation' | 'overdue-summary' | 'inventory-status'>('user-activity');
+  const [dateRange, setDateRange] = useState({
+    start_date: '',
+    end_date: ''
+  });
+  const [customDateRange, setCustomDateRange] = useState('last30days');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOperationLoading, setIsOperationLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
 
-  const handleExportToPDF = async () => {
-    setIsExportingPDF(true);
-    try {
-      // Add a small delay to show the loading state
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const reportData: ReportData = {
-        totalUsers: mockStats.totalUsers,
-        totalBooks: mockStats.totalBooks,
-        issuedBooks: mockStats.issuedBooks,
-        overdueBooks: mockStats.overdueBooks,
-        newUsersThisMonth: mockStats.newUsersThisMonth,
-        booksAddedThisMonth: mockStats.booksAddedThisMonth,
-        popularGenres: mockStats.popularGenres,
-        monthlyIssues: mockStats.monthlyIssues,
-        topBorrowers: mockStats.topBorrowers,
-        mostIssuedBooks: mockStats.mostIssuedBooks,
-        weeklyTrends: mockStats.weeklyTrends
-      };
-      
-      exportToPDF(reportData, dateRange, reportType);
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      alert('Error generating PDF report. Please try again.');
-    } finally {
-      setIsExportingPDF(false);
+  // Report data state
+  const [userActivityData, setUserActivityData] = useState<UserActivityReport[]>([]);
+  const [bookCirculationData, setBookCirculationData] = useState<BookCirculationReport[]>([]);
+  const [overdueSummaryData, setOverdueSummaryData] = useState<OverdueSummaryReport | null>(null);
+  const [inventoryStatusData, setInventoryStatusData] = useState<InventoryStatusReport | null>(null);
+
+  // Filter states
+  const [userIdFilter, setUserIdFilter] = useState<number | ''>('');
+  const [genreFilter, setGenreFilter] = useState('');
+
+  useEffect(() => {
+    const fetchReportData = async () => {
+      if (!auth.user) {
+        setError('Authentication required. Please log in to access reports.');
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+        if (!token) {
+          throw new Error('Authentication token not found');
+        }
+
+        // Set date range based on custom selection
+        const dateParams = getDateRangeParams();
+
+        // Fetch all report types
+        const [userActivity, bookCirculation, overdueSummary, inventoryStatus] = await Promise.all([
+          getUserActivityReport(token, dateParams.start_date, dateParams.end_date, userIdFilter || undefined),
+          getBookCirculationReport(token, dateParams.start_date, dateParams.end_date, genreFilter || undefined),
+          getOverdueSummaryReport(token, dateParams.start_date, dateParams.end_date),
+          getInventoryStatusReport(token)
+        ]);
+
+        setUserActivityData(userActivity.user_activity_report || []);
+        setBookCirculationData(bookCirculation.book_circulation_report || []);
+        setOverdueSummaryData(overdueSummary.overdue_summary);
+        setInventoryStatusData(inventoryStatus);
+      } catch (err) {
+        console.error('Failed to fetch report data:', err);
+        if (err instanceof Error && err.message.includes('401')) {
+          setError('Authentication expired. Please log in again.');
+        } else {
+          setError(err instanceof Error ? err.message : 'Failed to load report data');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReportData();
+  }, [auth.user, refreshKey, customDateRange, userIdFilter, genreFilter]);
+
+  useEffect(() => {
+    if (autoRefresh) {
+      const interval = setInterval(() => {
+        handleRefresh();
+      }, 30000); // Refresh every 30 seconds
+      setRefreshInterval(interval);
+    } else if (refreshInterval) {
+      clearInterval(refreshInterval);
+      setRefreshInterval(null);
     }
-  };
-
-  const handleExportToCSV = async () => {
-    setIsExportingCSV(true);
-    try {
-      // Add a small delay to show the loading state
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      const reportData: ReportData = {
-        totalUsers: mockStats.totalUsers,
-        totalBooks: mockStats.totalBooks,
-        issuedBooks: mockStats.issuedBooks,
-        overdueBooks: mockStats.overdueBooks,
-        newUsersThisMonth: mockStats.newUsersThisMonth,
-        booksAddedThisMonth: mockStats.booksAddedThisMonth,
-        popularGenres: mockStats.popularGenres,
-        monthlyIssues: mockStats.monthlyIssues,
-        topBorrowers: mockStats.topBorrowers,
-        mostIssuedBooks: mockStats.mostIssuedBooks,
-        weeklyTrends: mockStats.weeklyTrends
-      };
-      
-      exportToCSV(reportData, dateRange, reportType);
-    } catch (error) {
-      console.error('Error exporting CSV:', error);
-      alert('Error generating CSV report. Please try again.');
-    } finally {
-      setIsExportingCSV(false);
-    }
-  };
-
-  const getBarHeight = (value: number, maxValue: number) => {
-    return Math.max((value / maxValue) * 100, 5);
-  };
-
-  const getRankBadge = (index: number) => {
-    const colors = [
-      'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white', // Gold
-      'bg-gradient-to-r from-gray-300 to-gray-500 text-white',     // Silver
-      'bg-gradient-to-r from-amber-600 to-amber-800 text-white',   // Bronze
-      'bg-gradient-to-r from-blue-500 to-blue-700 text-white',     // Blue
-      'bg-gradient-to-r from-purple-500 to-purple-700 text-white'  // Purple
-    ];
     
-    return colors[index] || 'bg-gray-400 text-white';
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [autoRefresh]);
+
+  const getDateRangeParams = () => {
+    const now = new Date();
+    let startDate: string;
+    let endDate = now.toISOString();
+
+    switch (customDateRange) {
+      case 'last7days':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case 'last30days':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case 'last3months':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case 'last6months':
+        startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case 'lastyear':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString();
+        break;
+      case 'custom':
+        return {
+          start_date: dateRange.start_date,
+          end_date: dateRange.end_date
+        };
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    }
+
+    return { start_date: startDate, end_date: endDate };
   };
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const validateDateRange = (): boolean => {
+    if (customDateRange === 'custom') {
+      const errors: {[key: string]: string} = {};
+
+      if (!dateRange.start_date) {
+        errors.start_date = 'Start date is required';
+      }
+      if (!dateRange.end_date) {
+        errors.end_date = 'End date is required';
+      }
+      if (dateRange.start_date && dateRange.end_date && new Date(dateRange.start_date) > new Date(dateRange.end_date)) {
+        errors.date_range = 'Start date must be before end date';
+      }
+
+      setFormErrors(errors);
+      return Object.keys(errors).length === 0;
+    }
+    setFormErrors({});
+    return true;
+  };
+
+  const handleExportExcel = async () => {
+    if (!validateDateRange()) return;
+    if (!auth.user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      const dateParams = getDateRangeParams();
+
+      const exportParams: Record<string, string> = {};
+      if (dateParams.start_date) exportParams.start_date = dateParams.start_date;
+      if (dateParams.end_date) exportParams.end_date = dateParams.end_date;
+      if (userIdFilter && reportType === 'user-activity') exportParams.user_id = userIdFilter.toString();
+      if (genreFilter && reportType === 'book-circulation') exportParams.genre = genreFilter;
+
+      const blob = await exportReportExcel(token, reportType, exportParams);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${reportType}-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      showNotification('success', 'Excel report exported successfully');
+    } catch (err) {
+      console.error('Failed to export Excel report:', err);
+      if (err instanceof Error && err.message.includes('401')) {
+        showNotification('error', 'Authentication expired. Please log in again.');
+      } else {
+        showNotification('error', err instanceof Error ? err.message : 'Failed to export Excel report');
+      }
+    } finally {
+      setIsOperationLoading(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!validateDateRange()) return;
+    if (!auth.user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      const dateParams = getDateRangeParams();
+
+      const exportParams: Record<string, string> = {};
+      if (dateParams.start_date) exportParams.start_date = dateParams.start_date;
+      if (dateParams.end_date) exportParams.end_date = dateParams.end_date;
+      if (userIdFilter && reportType === 'user-activity') exportParams.user_id = userIdFilter.toString();
+      if (genreFilter && reportType === 'book-circulation') exportParams.genre = genreFilter;
+
+      const blob = await exportReportPDF(token, reportType, exportParams);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${reportType}-report-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      showNotification('success', 'PDF report exported successfully');
+    } catch (err) {
+      console.error('Failed to export PDF report:', err);
+      if (err instanceof Error && err.message.includes('401')) {
+        showNotification('error', 'Authentication expired. Please log in again.');
+      } else {
+        showNotification('error', err instanceof Error ? err.message : 'Failed to export PDF report');
+      }
+    } finally {
+      setIsOperationLoading(false);
+    }
+  };
+
+  const renderReportContent = () => {
+    switch (reportType) {
+      case 'user-activity':
+        return (
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">User Activity Report</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Borrowed</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Books</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overdue</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fines</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Activity</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {userActivityData.map((user) => (
+                    <tr key={user.user_id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{user.user_name}</div>
+                          <div className="text-sm text-gray-500">{user.user_usn}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.total_books_borrowed}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.current_books}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${user.overdue_books > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                          {user.overdue_books}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{user.total_fines}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {userActivityData.length === 0 && (
+              <div className="text-center py-8">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No user activity data found for the selected period.</p>
+              </div>
+            )}
+            {/* Pagination for user activity report */}
+            {userActivityData.length > 0 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Showing {Math.min(userActivityData.length, 20)} of {userActivityData.length} users
+                </div>
+                <div className="flex space-x-2">
+                  <button className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                    Previous
+                  </button>
+                  <button className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'book-circulation':
+        return (
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Book Circulation Report</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Issues</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days Borrowed</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Issued</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {bookCirculationData.map((book) => (
+                    <tr key={book.book_id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{book.book_title}</div>
+                          <div className="text-sm text-gray-500">by {book.book_author}</div>
+                          <div className="text-xs text-gray-400">{book.book_isbn}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.total_issues}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${book.current_status === 'Available' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                          {book.current_status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.total_days_borrowed}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'Never'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {bookCirculationData.length === 0 && (
+              <div className="text-center py-8">
+                <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No book circulation data found for the selected period.</p>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'overdue-summary':
+        return overdueSummaryData ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center">
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Overdue Books</p>
+                  <p className="text-2xl font-bold text-gray-900">{overdueSummaryData.total_overdue_books}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center">
+                <div className="p-3 bg-amber-100 rounded-lg">
+                  <Clock className="w-8 h-8 text-amber-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Pending Fines</p>
+                  <p className="text-2xl font-bold text-gray-900">₹{overdueSummaryData.total_pending_fines}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Paid Fines</p>
+                  <p className="text-2xl font-bold text-gray-900">₹{overdueSummaryData.total_paid_fines}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <TrendingUp className="w-8 h-8 text-blue-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Avg Overdue Days</p>
+                  <p className="text-2xl font-bold text-gray-900">{overdueSummaryData.average_overdue_days}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null;
+
+      case 'inventory-status':
+        return inventoryStatusData ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <BookOpen className="w-8 h-8 text-blue-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Books</p>
+                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.total_books}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <CheckCircle className="w-8 h-8 text-green-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Available</p>
+                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.available_books}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-amber-100 rounded-lg">
+                    <Clock className="w-8 h-8 text-amber-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Issued</p>
+                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.issued_books}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <Target className="w-8 h-8 text-purple-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Shelves</p>
+                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.total_shelves}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Shelf Utilization</h3>
+              <div className="space-y-4">
+                {inventoryStatusData.shelf_utilization.map((shelf) => (
+                  <div key={shelf.shelf_id} className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-gray-700">{shelf.shelf_name}</span>
+                      <span className="text-gray-600">{shelf.current_books}/{shelf.capacity} ({shelf.utilization_percentage}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-1000 ease-out ${
+                          shelf.utilization_percentage >= 90 ? 'bg-red-500' :
+                          shelf.utilization_percentage >= 75 ? 'bg-amber-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${shelf.utilization_percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null;
+
+      default:
+        return null;
+    }
+  };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+          <h1 className="text-3xl font-bold mb-2">Reports & Analytics</h1>
+          <p className="text-indigo-100">Loading report data...</p>
+        </div>
+        <div className="flex justify-center items-center p-12">
+          <Loader className="w-8 h-8 animate-spin text-indigo-600" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <div className="bg-gradient-to-r from-red-600 to-orange-600 rounded-2xl p-8 text-white">
+          <h1 className="text-3xl font-bold mb-2">Error Loading Reports</h1>
+          <p className="text-red-100 mb-4">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-white text-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Retry</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white relative">
         <h1 className="text-3xl font-bold mb-2">Reports & Analytics</h1>
         <p className="text-indigo-100">Track library performance and generate detailed reports</p>
+        <button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="absolute top-4 right-4 p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50"
+          title="Refresh Data"
+        >
+          <RefreshCw className={`w-4 h-4 text-white ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
+        <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          className={`absolute top-4 right-16 p-2 rounded-full transition-colors ${
+            autoRefresh 
+              ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
+              : 'bg-white/20 text-white hover:bg-white/30'
+          }`}
+          title={autoRefresh ? 'Disable Auto-refresh' : 'Enable Auto-refresh'}
+        >
+          <RefreshCw className={`w-4 h-4 ${autoRefresh ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Controls */}
       <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            {/* Date Range */}
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
-              >
-                <option value="last7days">Last 7 Days</option>
-                <option value="last30days">Last 30 Days</option>
-                <option value="last3months">Last 3 Months</option>
-                <option value="last6months">Last 6 Months</option>
-                <option value="lastyear">Last Year</option>
-              </select>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left column - Report Settings */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Report Settings</h3>
 
             {/* Report Type */}
-            <div className="relative">
-              <BarChart3 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <select
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value)}
-                className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
-              >
-                <option value="overview">Overview</option>
-                <option value="circulation">Circulation</option>
-                <option value="inventory">Inventory</option>
-                <option value="users">Users</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Export Buttons */}
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-            <button
-              onClick={handleExportToPDF}
-              disabled={isExportingPDF}
-              className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg hover:shadow-xl"
-            >
-              {isExportingPDF ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <FileText className="w-5 h-5" />
-              )}
-              <span>{isExportingPDF ? 'Generating...' : 'Export PDF'}</span>
-            </button>
-            <button
-              onClick={handleExportToCSV}
-              disabled={isExportingCSV}
-              className="flex items-center justify-center space-x-2 bg-emerald-600 text-white px-4 py-3 rounded-lg hover:bg-emerald-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 shadow-lg hover:shadow-xl"
-            >
-              {isExportingCSV ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Download className="w-5 h-5" />
-              )}
-              <span>{isExportingCSV ? 'Generating...' : 'Export CSV'}</span>
-            </button>
-          </div>
-        </div>
-        
-        {/* Export Info */}
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <FileText className="w-4 h-4 text-blue-600" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Report Type</label>
+              <div className="relative">
+                <BarChart3 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <select
+                  value={reportType}
+                  onChange={(e) => setReportType(e.target.value as any)}
+                  className="w-full pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
+                >
+                  <option value="user-activity">User Activity Report</option>
+                  <option value="book-circulation">Book Circulation Report</option>
+                  <option value="overdue-summary">Overdue Summary Report</option>
+                  <option value="inventory-status">Inventory Status Report</option>
+                </select>
               </div>
             </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-blue-900 mb-1">Export Information</h4>
-              <p className="text-sm text-blue-700">
-                <strong>PDF:</strong> Comprehensive report with charts, tables, and visual analytics. Perfect for presentations and formal documentation.
-              </p>
-              <p className="text-sm text-blue-700 mt-1">
-                <strong>CSV:</strong> Raw data export for further analysis in spreadsheet applications or data processing tools.
-              </p>
-              <p className="text-xs text-blue-600 mt-2">
-                📅 Reports include generation timestamp and selected date range for reference.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
+            {/* Date Range */}
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Users</p>
-              <p className="text-3xl font-bold text-gray-900">{mockStats.totalUsers}</p>
-              <p className="text-sm text-emerald-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                +{mockStats.newUsersThisMonth} this month
-              </p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Users className="w-8 h-8 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Books</p>
-              <p className="text-3xl font-bold text-gray-900">{mockStats.totalBooks}</p>
-              <p className="text-sm text-emerald-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                +{mockStats.booksAddedThisMonth} this month
-              </p>
-            </div>
-            <div className="p-3 bg-emerald-100 rounded-lg">
-              <BookOpen className="w-8 h-8 text-emerald-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Currently Issued</p>
-              <p className="text-3xl font-bold text-gray-900">{mockStats.issuedBooks}</p>
-              <p className="text-sm text-gray-600 flex items-center mt-1">
-                <Clock className="w-4 h-4 mr-1" />
-                {Math.round((mockStats.issuedBooks / mockStats.totalBooks) * 100)}% of collection
-              </p>
-            </div>
-            <div className="p-3 bg-amber-100 rounded-lg">
-              <Clock className="w-8 h-8 text-amber-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Overdue Books</p>
-              <p className="text-3xl font-bold text-gray-900">{mockStats.overdueBooks}</p>
-              <p className="text-sm text-red-600 flex items-center mt-1">
-                <AlertTriangle className="w-4 h-4 mr-1" />
-                Require attention
-              </p>
-            </div>
-            <div className="p-3 bg-red-100 rounded-lg">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Most Issued Books Chart */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Star className="w-5 h-5 text-yellow-500 mr-2" />
-              Most Issued Books
-            </h3>
-            <div className="text-sm text-gray-500">Last 30 days</div>
-          </div>
-          
-          <div className="space-y-4">
-            {mockStats.mostIssuedBooks.map((book, index) => {
-              const maxIssues = Math.max(...mockStats.mostIssuedBooks.map(b => b.issueCount));
-              const percentage = (book.issueCount / maxIssues) * 100;
-              
-              return (
-                <div key={index} className="space-y-2">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium text-gray-900 truncate">{book.title}</h4>
-                      <p className="text-xs text-gray-500">by {book.author}</p>
-                      <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full mt-1">
-                        {book.genre}
-                      </span>
-                    </div>
-                    <div className="text-right ml-4">
-                      <div className="text-lg font-bold text-indigo-600">{book.issueCount}</div>
-                      <div className="text-xs text-gray-500">issues</div>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2 rounded-full transition-all duration-1000 ease-out"
-                      style={{ width: `${percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Weekly Circulation Trends */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <BarChart3 className="w-5 h-5 text-blue-500 mr-2" />
-              Weekly Circulation Trends
-            </h3>
-            <div className="flex space-x-4 text-sm">
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-blue-500 rounded-full mr-1"></div>
-                <span className="text-gray-600">Issues</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-emerald-500 rounded-full mr-1"></div>
-                <span className="text-gray-600">Returns</span>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <select
+                  value={customDateRange}
+                  onChange={(e) => setCustomDateRange(e.target.value)}
+                  className="w-full pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
+                >
+                  <option value="last7days">Last 7 Days</option>
+                  <option value="last30days">Last 30 Days</option>
+                  <option value="last3months">Last 3 Months</option>
+                  <option value="last6months">Last 6 Months</option>
+                  <option value="lastyear">Last Year</option>
+                  <option value="custom">Custom Range</option>
+                </select>
               </div>
             </div>
-          </div>
-          
-          <div className="flex items-end justify-between h-48 space-x-2">
-            {mockStats.weeklyTrends.map((day, index) => {
-              const maxValue = Math.max(...mockStats.weeklyTrends.flatMap(d => [d.issues, d.returns]));
-              const issueHeight = getBarHeight(day.issues, maxValue);
-              const returnHeight = getBarHeight(day.returns, maxValue);
-              
-              return (
-                <div key={index} className="flex-1 flex flex-col items-center space-y-2">
-                  <div className="flex items-end space-x-1 h-32">
-                    <div 
-                      className="bg-blue-500 rounded-t-sm transition-all duration-1000 ease-out w-4"
-                      style={{ height: `${issueHeight}%` }}
-                      title={`Issues: ${day.issues}`}
-                    ></div>
-                    <div 
-                      className="bg-emerald-500 rounded-t-sm transition-all duration-1000 ease-out w-4"
-                      style={{ height: `${returnHeight}%` }}
-                      title={`Returns: ${day.returns}`}
-                    ></div>
-                  </div>
-                  <div className="text-xs text-gray-600 font-medium">{day.day}</div>
-                  <div className="text-xs text-gray-500">{day.issues}/{day.returns}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
 
-      {/* Top Borrowers Leaderboard */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Award className="w-5 h-5 text-yellow-500 mr-2" />
-            Top Borrowers Leaderboard
-          </h3>
-          <div className="text-sm text-gray-500">Most active readers</div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {mockStats.topBorrowers.map((borrower, index) => (
-            <div key={index} className="relative">
-              <div className={`rounded-xl p-6 text-center transform transition-all duration-300 hover:scale-105 ${
-                index === 0 ? 'bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-300' :
-                index === 1 ? 'bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300' :
-                index === 2 ? 'bg-gradient-to-br from-amber-50 to-amber-100 border-2 border-amber-300' :
-                'bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200'
-              }`}>
-                {/* Rank Badge */}
-                <div className={`absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${getRankBadge(index)}`}>
-                  {index + 1}
+            {/* Custom Date Range */}
+            {customDateRange === 'custom' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                  <input
+                    type="date"
+                    value={dateRange.start_date.split('T')[0] || ''}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start_date: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
+                    className={`w-full px-3 py-2 border ${formErrors.start_date ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'} rounded-lg focus:ring-2 focus:border-transparent`}
+                  />
+                  {formErrors.start_date && <p className="mt-1 text-red-500 text-xs">{formErrors.start_date}</p>}
                 </div>
-                
-                {/* Avatar */}
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 text-white font-bold text-lg ${
-                  index === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' :
-                  index === 1 ? 'bg-gradient-to-r from-gray-400 to-gray-600' :
-                  index === 2 ? 'bg-gradient-to-r from-amber-500 to-amber-700' :
-                  'bg-gradient-to-r from-blue-500 to-blue-700'
-                }`}>
-                  {borrower.avatar}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                  <input
+                    type="date"
+                    value={dateRange.end_date.split('T')[0] || ''}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end_date: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
+                    className={`w-full px-3 py-2 border ${formErrors.end_date ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'} rounded-lg focus:ring-2 focus:border-transparent`}
+                  />
+                  {formErrors.end_date && <p className="mt-1 text-red-500 text-xs">{formErrors.end_date}</p>}
                 </div>
-                
-                {/* Name and Details */}
-                <h4 className="font-semibold text-gray-900 mb-1">{borrower.name}</h4>
-                <p className="text-xs text-gray-600 mb-2">{borrower.usn}</p>
-                
-                {/* Books Count */}
-                <div className="flex items-center justify-center space-x-1">
-                  <BookOpen className="w-4 h-4 text-indigo-600" />
-                  <span className="text-lg font-bold text-indigo-600">{borrower.books}</span>
-                  <span className="text-sm text-gray-600">books</span>
-                </div>
-                
-                {/* Achievement Badge for Top 3 */}
-                {index < 3 && (
-                  <div className="mt-2">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      index === 0 ? 'bg-yellow-100 text-yellow-800' :
-                      index === 1 ? 'bg-gray-100 text-gray-800' :
-                      'bg-amber-100 text-amber-800'
-                    }`}>
-                      {index === 0 ? '🏆 Champion' : index === 1 ? '🥈 Runner-up' : '🥉 Third Place'}
-                    </span>
+                {formErrors.date_range && (
+                  <div className="col-span-2">
+                    <p className="text-red-500 text-xs">{formErrors.date_range}</p>
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Additional Filters */}
+            {reportType === 'user-activity' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">User ID Filter (Optional)</label>
+                <input
+                  type="number"
+                  value={userIdFilter}
+                  onChange={(e) => setUserIdFilter(e.target.value ? parseInt(e.target.value) : '')}
+                  placeholder="Filter by specific user ID"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            )}
+
+            {reportType === 'book-circulation' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Genre Filter (Optional)</label>
+                <input
+                  type="text"
+                  value={genreFilter}
+                  onChange={(e) => setGenreFilter(e.target.value)}
+                  placeholder="Filter by genre"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            )}
+            
+            {/* Search Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder={`Search ${reportType.replace('-', ' ')} data...`}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  onChange={(e) => {
+                    // Implement search logic based on report type
+                    const searchTerm = e.target.value.toLowerCase();
+                    if (reportType === 'user-activity') {
+                      // Filter user activity data
+                    } else if (reportType === 'book-circulation') {
+                      // Filter book circulation data
+                    }
+                  }}
+                />
+              </div>
             </div>
-          ))}
+          </div>
+
+          {/* Right column - Export Options */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Export Options</h3>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">Generate downloadable reports in your preferred format:</p>
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+                <button
+                  onClick={handleExportExcel}
+                  disabled={isOperationLoading}
+                  className="flex items-center justify-center space-x-2 bg-emerald-600 text-white px-4 py-3 rounded-lg hover:bg-emerald-700 transition-all duration-200 disabled:opacity-50 shadow-md"
+                >
+                  {isOperationLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Download className="w-5 h-5" />
+                  )}
+                  <span>{isOperationLoading ? 'Generating...' : 'Export Excel'}</span>
+                </button>
+                <button
+                  onClick={handleExportPDF}
+                  disabled={isOperationLoading}
+                  className="flex items-center justify-center space-x-2 bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-all duration-200 disabled:opacity-50 shadow-md"
+                >
+                  {isOperationLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
+                  <span>{isOperationLoading ? 'Generating...' : 'Export PDF'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Export Info */}
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-blue-900 mb-1">Export Information</h4>
+                  <p className="text-sm text-blue-700">
+                    <strong>PDF:</strong> Comprehensive report with tables and visual analytics. Perfect for presentations and formal documentation.
+                  </p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    <strong>Excel:</strong> Raw data export for further analysis in spreadsheet applications or data processing tools.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Popular Genres */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Target className="w-5 h-5 text-purple-500 mr-2" />
-            Popular Genres
-          </h3>
-          <div className="text-sm text-gray-500">Distribution by category</div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            {mockStats.popularGenres.map((genre, index) => (
-              <div key={index} className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-700">{genre.name}</span>
-                  <span className="text-gray-600">{genre.count} books ({genre.percentage}%)</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div 
-                    className={`h-3 rounded-full transition-all duration-1000 ease-out ${
-                      index === 0 ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
-                      index === 1 ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' :
-                      index === 2 ? 'bg-gradient-to-r from-purple-500 to-purple-600' :
-                      'bg-gradient-to-r from-amber-500 to-amber-600'
-                    }`}
-                    style={{ width: `${genre.percentage}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          {/* Donut Chart Representation */}
-          <div className="flex items-center justify-center">
-            <div className="relative w-48 h-48">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                {mockStats.popularGenres.map((genre, index) => {
-                  const colors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B'];
-                  const total = mockStats.popularGenres.reduce((sum, g) => sum + g.percentage, 0);
-                  const offset = mockStats.popularGenres.slice(0, index).reduce((sum, g) => sum + g.percentage, 0);
-                  const strokeDasharray = `${genre.percentage} ${100 - genre.percentage}`;
-                  const strokeDashoffset = -offset;
-                  
-                  return (
-                    <circle
-                      key={index}
-                      cx="50"
-                      cy="50"
-                      r="15.915"
-                      fill="transparent"
-                      stroke={colors[index]}
-                      strokeWidth="8"
-                      strokeDasharray={strokeDasharray}
-                      strokeDashoffset={strokeDashoffset}
-                      className="transition-all duration-1000 ease-out"
-                    />
-                  );
-                })}
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{mockStats.popularGenres.reduce((sum, g) => sum + g.count, 0)}</div>
-                  <div className="text-xs text-gray-500">Total Books</div>
-                </div>
-              </div>
-            </div>
+      {/* Report Content */}
+      {renderReportContent()}
+
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
+          notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          <div className="flex items-center space-x-2">
+            {notification.type === 'success' ? (
+              <CheckCircle className="w-5 h-5" />
+            ) : (
+              <AlertTriangle className="w-5 h-5" />
+            )}
+            <span className="text-sm font-medium">{notification.message}</span>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Loading Overlay */}
+      {isOperationLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <Loader className="w-6 h-6 animate-spin text-indigo-600" />
+            <span className="text-gray-700">Generating report...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

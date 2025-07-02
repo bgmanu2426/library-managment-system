@@ -12,7 +12,7 @@ import InventoryManagement from './components/admin/InventoryManagement';
 import Reports from './components/admin/Reports';
 import OverdueManagement from './components/admin/OverdueManagement';
 
-const AppContent: React.FC = () => {
+const AppContent: React.FC = React.memo(() => {
   const { user, isLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
 
@@ -65,14 +65,16 @@ const AppContent: React.FC = () => {
       {renderPage()}
     </Layout>
   );
-};
+});
 
-function App() {
+AppContent.displayName = 'AppContent';
+
+const App: React.FC = () => {
   return (
     <AuthProvider>
       <AppContent />
     </AuthProvider>
   );
-}
+};
 
 export default App;

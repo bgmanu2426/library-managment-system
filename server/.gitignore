@@ -8,3 +8,34 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment files
+# These contain sensitive information like database credentials, API keys, and secrets
+# Never commit these files to version control for security reasons
+.env
+.env.*
+!.env.example
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Backup files
+*.bak
+*.backup
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
