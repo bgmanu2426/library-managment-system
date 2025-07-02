@@ -1,93 +1,167 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, AuthContextType } from '../types';
+import { 
+  getApiUrl, 
+  createAuthenticatedRequest, 
+  API_ENDPOINTS, 
+  login as apiLogin,
+  verifyToken,
+  logout as apiLogout
+} from '../utils/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration
-const mockUsers: (User & { password: string })[] = [
-  {
-    id: '1',
-    name: 'Admin User',
-    usn: 'ADMIN001',
-    email: 'admin@library.com',
-    mobile: '+91 9876543210',
-    address: '123 Admin Street, Library City',
-    role: 'admin',
-    password: 'admin123',
-    createdAt: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: '2',
-    name: 'John Doe',
-    usn: 'CS21001',
-    email: 'john@student.com',
-    mobile: '+91 9876543211',
-    address: '456 Student Street, College Town',
-    role: 'user',
-    password: 'user123',
-    createdAt: '2024-01-15T00:00:00Z'
-  },
-  {
-    id: '3',
-    name: 'Jane Smith',
-    usn: 'CS21002',
-    email: 'jane@student.com',
-    mobile: '+91 9876543212',
-    address: '789 University Road, Academic City',
-    role: 'user',
-    password: 'user123',
-    createdAt: '2024-01-20T00:00:00Z'
-  }
-];
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const savedUser = localStorage.getItem('library_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const foundUser = mockUsers.find(u => u.email === email && u.password === password);
-    
-    if (foundUser) {
-      const { password: _, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('library_user', JSON.stringify(userWithoutPassword));
-      setIsLoading(false);
-      return true;
-    }
-    
-    setIsLoading(false);
-    return false;
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('library_user');
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [loginInProgress, setLoginInProgress] = useState<boolean>(false);
+  const TOKEN_KEY = import.meta.env.VITE_TOKEN_KEY || 'library_token';
+  const USER_KEY = import.meta.env.VITE_USER_KEY || 'library_user';
+
+  const getToken = useCallback((): string | null => {
+    return localStorage.getItem(TOKEN_KEY);
+  }, [TOKEN_KEY]);
+
+  const checkToken = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    const token = getToken();
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
+      const response = await verifyToken(token);
+      
+      if (response.valid && response.user) {
+        setUser(response.user);
+      } else {
+        // Token is invalid or expired
+        console.warn('Token validation failed: Token is no longer valid');
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error during token verification:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error during authentication');
+      // Clear invalid tokens on verification errors
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getToken, TOKEN_KEY, USER_KEY]);
+
+  useEffect(() => {
+    checkToken();
+    
+    // Set up token refresh interval - optional
+    // const refreshInterval = setInterval(() => {
+    //   const token = getToken();
+    //   if (token) {
+    //     checkToken();
+    //   }
+    // }, 15 * 60 * 1000); // Refresh every 15 minutes
+    
+    // return () => clearInterval(refreshInterval);
+  }, [checkToken]);
+
+  const login = async (email: string, password: string, userType: 'admin' | 'user' = 'user'): Promise<boolean> => {
+    setIsLoading(true);
+    setLoginInProgress(true);
+    setError(null);
+    
+    try {
+      // Send credentials using form data format for OAuth2PasswordRequestForm compatibility
+      const loginResult = await apiLogin(email, password);
+      
+      if (loginResult.success && loginResult.token && loginResult.user) {
+        localStorage.setItem(TOKEN_KEY, loginResult.token);
+        localStorage.setItem(USER_KEY, JSON.stringify(loginResult.user));
+        setUser(loginResult.user);
+        return true;
+      } else {
+        const errorMessage = loginResult.error || 'Authentication failed. Please check your credentials.';
+        setError(errorMessage);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error during login:', error);
+      let errorMessage = 'Network error during login. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('401')) {
+          errorMessage = 'Invalid username or password. Please try again.';
+        } else if (error.message.includes('500')) {
+          errorMessage = 'Server error. Please try again later.';
+        } else if (error.message.includes('timeout') || error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      return false;
+    } finally {
+      setIsLoading(false);
+      setLoginInProgress(false);
+    }
+  };
+
+  const logout = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    try {
+      const token = getToken();
+      
+      // Only call API logout if we have a token
+      if (token) {
+        await apiLogout(token).catch(err => {
+          console.warn('Error during API logout:', err);
+          // Continue with local logout even if API logout fails
+        });
+      }
+    } catch (error) {
+      console.warn('Error during logout process:', error);
+    } finally {
+      // Always perform local logout regardless of API result
+      setUser(null);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      setIsLoading(false);
+    }
+  }, [getToken, TOKEN_KEY, USER_KEY]);
+
+  const contextValue: AuthContextType = {
+    user,
+    login,
+    logout,
+    isLoading,
+    loginInProgress,
+    error,
+    checkToken
+  };
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+AuthProvider.displayName = 'AuthProvider';
+
+export { AuthContext };

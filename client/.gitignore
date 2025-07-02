@@ -22,4 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+# These files contain sensitive information and should never be committed to version control
 .env
+.env.*
+!.env.example

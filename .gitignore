@@ -1,2 +1,20 @@
 node_modules/
 .env
+
+# Clacky-related configuration
+.1024*
+!.1024
+.breakpoints
+
+# Python/FastAPI backend files
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

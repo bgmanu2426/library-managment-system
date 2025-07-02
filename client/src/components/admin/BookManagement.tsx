@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { mockBooks, mockRacks, mockShelves } from '../../data/mockData';
-import { 
-  BookOpen, 
-  Plus, 
-  Search, 
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  BookOpen,
+  Plus,
+  Search,
   Filter,
   Edit3,
   Trash2,
@@ -13,8 +12,24 @@ import {
   AlertTriangle,
   X,
   RotateCcw,
-  User
+  User,
+  RefreshCw,
+  Loader
 } from 'lucide-react';
+import {
+  getBooks,
+  createBook,
+  updateBook,
+  deleteBook,
+  searchBooks,
+  getRacks,
+  getShelves,
+  getUsers,
+  issueBook,
+  returnBook
+} from '../../utils/api';
+import { Book, Rack, Shelf, BookCreatePayload, BookUpdatePayload, User as AppUser, IssueBookPayload, ReturnBookPayload } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 
 const BookManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,7 +39,7 @@ const BookManagement: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
-  const [selectedBook, setSelectedBook] = useState<any>(null);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [newBook, setNewBook] = useState({
     title: '',
     author: '',
@@ -45,33 +60,40 @@ const BookManagement: React.FC = () => {
     notes: ''
   });
 
-  const filteredBooks = mockBooks.filter(book => {
-    const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         book.isbn.includes(searchTerm);
-    
-    const matchesFilter = filterStatus === 'all' || 
-                         (filterStatus === 'available' && book.isAvailable) ||
-                         (filterStatus === 'issued' && !book.isAvailable);
-    
-    return matchesSearch && matchesFilter;
-  });
+  const { user } = useAuth();
+  const [books, setBooks] = useState<Book[]>([]);
+  const [racks, setRacks] = useState<Rack[]>([]);
+  const [shelves, setShelves] = useState<Shelf[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOperationLoading, setIsOperationLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalBooks, setTotalBooks] = useState(0);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const itemsPerPage = 20;
 
-  const getRackName = (rackId: string) => {
-    return mockRacks.find(rack => rack.id === rackId)?.name || 'Unknown';
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Book[]>([]);
+
+  const getRackName = (rackId: number) => {
+    return racks.find(rack => rack.id === rackId)?.name || 'Unknown';
   };
 
-  const getShelfName = (shelfId: string) => {
-    return mockShelves.find(shelf => shelf.id === shelfId)?.name || 'Unknown';
+  const getShelfName = (shelfId: number) => {
+    return shelves.find(shelf => shelf.id === shelfId)?.name || 'Unknown';
   };
 
-  const getAvailableShelves = (rackId: string) => {
-    return mockShelves.filter(shelf => shelf.rackId === rackId);
+  const getAvailableShelves = (rackId: number) => {
+    return shelves.filter(shelf => shelf.rack_id === rackId);
   };
 
   const getStatusIcon = (isAvailable: boolean) => {
-    return isAvailable ? 
-      <CheckCircle className="w-4 h-4 text-emerald-600" /> : 
+    return isAvailable ?
+      <CheckCircle className="w-4 h-4 text-emerald-600" /> :
       <Clock className="w-4 h-4 text-amber-600" />;
   };
 
@@ -79,10 +101,210 @@ const BookManagement: React.FC = () => {
     return isAvailable ? 'text-emerald-600' : 'text-amber-600';
   };
 
-  const handleAddBook = () => {
-    if (newBook.title && newBook.author && newBook.isbn && newBook.rackId && newBook.shelfId) {
-      console.log('Adding new book:', newBook);
-      // In a real app, this would make an API call
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+    setCurrentPage(0); // Reset to first page on refresh
+    setSearchTerm(''); // Clear search term on refresh
+    setFilterStatus('all'); // Reset filter status on refresh
+  };
+
+  const fetchData = useCallback(async () => {
+    if (!user) {
+      setError("Authentication required");
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const [booksResponse, racksResponse, shelvesResponse, usersResponse] = await Promise.all([
+        getBooks(token, currentPage * itemsPerPage, itemsPerPage),
+        getRacks(token),
+        getShelves(token),
+        getUsers(token, 0, 1000)
+      ]);
+
+      // Handle proper response format from updated API
+      if (booksResponse && typeof booksResponse === 'object') {
+        setBooks(booksResponse.books || []);
+        setTotalBooks(booksResponse.total || 0);
+      } else {
+        setBooks([]);
+        setTotalBooks(0);
+      }
+
+      if (racksResponse && typeof racksResponse === 'object') {
+        setRacks(racksResponse.racks || []);
+      } else {
+        setRacks([]);
+      }
+
+      if (shelvesResponse && typeof shelvesResponse === 'object') {
+        setShelves(shelvesResponse.shelves || []);
+      } else {
+        setShelves([]);
+      }
+
+      if (usersResponse && typeof usersResponse === 'object') {
+        setUsers(usersResponse.users || []);
+        setTotalUsers(usersResponse.total || 0);
+      } else {
+        setUsers([]);
+        setTotalUsers(0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch data:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('401') || err.message.includes('Authentication')) {
+          setError('Authentication expired. Please log in again.');
+        } else if (err.message.includes('403')) {
+          setError('Access denied. Insufficient permissions.');
+        } else if (err.message.includes('Network') || err.message.includes('fetch')) {
+          setError('Network error. Please check your connection and try again.');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('Failed to load data. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, currentPage, refreshKey]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await searchBooks(token, query, 0, 50);
+      if (response && typeof response === 'object') {
+        setSearchResults(response.books || []);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (err) {
+      console.error('Search failed:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('401')) {
+          showNotification('error', 'Authentication expired. Please log in again.');
+        } else if (err.message.includes('Network')) {
+          showNotification('error', 'Network error. Please check your connection.');
+        } else {
+          showNotification('error', 'Search failed. Please try again.');
+        }
+      } else {
+        showNotification('error', 'Search failed. Please try again.');
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const filteredBooks = useMemo(() => {
+    // Ensure we have valid arrays to work with
+    const sourceBooks = searchTerm ? (Array.isArray(searchResults) ? searchResults : []) : (Array.isArray(books) ? books : []);
+    
+    return sourceBooks.filter(book => {
+      // Add null/undefined checks for book properties
+      if (!book || typeof book !== 'object') return false;
+      
+      const matchesFilter = filterStatus === 'all' ||
+                           (filterStatus === 'available' && Boolean(book.is_available)) ||
+                           (filterStatus === 'issued' && !Boolean(book.is_available));
+      return matchesFilter;
+    });
+  }, [searchTerm, searchResults, books, filterStatus]);
+
+  const validateBookForm = (bookData: BookCreatePayload | BookUpdatePayload): {[key: string]: string} => {
+    const errors: {[key: string]: string} = {};
+
+    if (!bookData.title?.trim()) {
+      errors.title = 'Title is required';
+    } else if (bookData.title.trim().length < 2) {
+      errors.title = 'Title must be at least 2 characters long';
+    }
+
+    if (!bookData.author?.trim()) {
+      errors.author = 'Author is required';
+    } else if (bookData.author.trim().length < 2) {
+      errors.author = 'Author must be at least 2 characters long';
+    }
+
+    if ('isbn' in bookData && !bookData.isbn?.trim()) {
+      errors.isbn = 'ISBN is required';
+    } else if ('isbn' in bookData && bookData.isbn && !/^[\d\-X]+$/.test(bookData.isbn.replace(/\s/g, ''))) {
+      errors.isbn = 'Please enter a valid ISBN (digits, hyphens, and X only)';
+    }
+
+    if (!bookData.genre?.trim()) {
+      errors.genre = 'Genre is required';
+    }
+
+    if (!bookData.rack_id || bookData.rack_id === 0) {
+      errors.rack_id = 'Rack selection is required';
+    }
+
+    if (!bookData.shelf_id || bookData.shelf_id === 0) {
+      errors.shelf_id = 'Shelf selection is required';
+    }
+
+    return errors;
+  };
+
+  const handleAddBook = async () => {
+    if (!user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    const bookData: BookCreatePayload = {
+      title: newBook.title.trim(),
+      author: newBook.author.trim(),
+      isbn: newBook.isbn.trim(),
+      genre: newBook.genre.trim(),
+      rack_id: parseInt(newBook.rackId),
+      shelf_id: parseInt(newBook.shelfId)
+    };
+
+    const errors = validateBookForm(bookData);
+    setFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) return;
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      await createBook(token, bookData);
+      showNotification('success', 'Book added successfully');
       setNewBook({
         title: '',
         author: '',
@@ -91,75 +313,266 @@ const BookManagement: React.FC = () => {
         rackId: '',
         shelfId: ''
       });
+      setFormErrors({});
       setShowAddModal(false);
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to add book:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('already exists')) {
+          showNotification('error', 'A book with this ISBN already exists.');
+        } else if (err.message.includes('full capacity')) {
+          showNotification('error', 'Selected shelf is at full capacity. Please choose another shelf.');
+        } else if (err.message.includes('401')) {
+          showNotification('error', 'Authentication expired. Please log in again.');
+        } else if (err.message.includes('403')) {
+          showNotification('error', 'Access denied. You do not have permission to add books.');
+        } else if (err.message.includes('Network')) {
+          showNotification('error', 'Network error. Please check your connection and try again.');
+        } else {
+          showNotification('error', err.message);
+        }
+      } else {
+        showNotification('error', 'Failed to add book. Please try again.');
+      }
+    } finally {
+      setIsOperationLoading(false);
     }
   };
 
-  const handleEditBook = (book: any) => {
+  const handleEditBook = (book: Book) => {
     setSelectedBook({ ...book });
+    setFormErrors({}); // Clear previous errors
     setShowEditModal(true);
   };
 
-  const handleUpdateBook = () => {
-    if (selectedBook) {
-      console.log('Updating book:', selectedBook);
-      // In a real app, this would make an API call
+  const handleUpdateBook = async () => {
+    if (!selectedBook || !user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    const bookData: BookUpdatePayload = {
+      title: selectedBook.title.trim(),
+      author: selectedBook.author.trim(),
+      genre: selectedBook.genre.trim(),
+      rack_id: selectedBook.rack_id,
+      shelf_id: selectedBook.shelf_id
+    };
+
+    const errors = validateBookForm(bookData);
+    setFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) return;
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      await updateBook(token, selectedBook.id, bookData);
+      showNotification('success', 'Book updated successfully');
       setShowEditModal(false);
       setSelectedBook(null);
+      setFormErrors({});
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to update book:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('not found')) {
+          showNotification('error', 'Book not found. Please refresh and try again.');
+        } else if (err.message.includes('401')) {
+          showNotification('error', 'Authentication expired. Please log in again.');
+        } else if (err.message.includes('403')) {
+          showNotification('error', 'Access denied. You do not have permission to update books.');
+        } else if (err.message.includes('Network')) {
+          showNotification('error', 'Network error. Please check your connection and try again.');
+        } else {
+          showNotification('error', err.message);
+        }
+      } else {
+        showNotification('error', 'Failed to update book. Please try again.');
+      }
+    } finally {
+      setIsOperationLoading(false);
     }
   };
 
-  const handleDeleteBook = (book: any) => {
+  const handleDeleteBook = (book: Book) => {
     setSelectedBook(book);
     setShowDeleteModal(true);
   };
 
-  const confirmDeleteBook = () => {
-    if (selectedBook) {
-      console.log('Deleting book:', selectedBook.id);
-      // In a real app, this would make an API call
+  const confirmDeleteBook = async () => {
+    if (!selectedBook || !user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      await deleteBook(token, selectedBook.id);
+      showNotification('success', 'Book deleted successfully');
       setShowDeleteModal(false);
       setSelectedBook(null);
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to delete book:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('not found')) {
+          showNotification('error', 'Book not found. Please refresh and try again.');
+        } else if (err.message.includes('currently issued')) {
+          showNotification('error', 'Cannot delete book that is currently issued. Please return the book first.');
+        } else if (err.message.includes('401')) {
+          showNotification('error', 'Authentication expired. Please log in again.');
+        } else if (err.message.includes('403')) {
+          showNotification('error', 'Access denied. You do not have permission to delete books.');
+        } else if (err.message.includes('Network')) {
+          showNotification('error', 'Network error. Please check your connection and try again.');
+        } else {
+          showNotification('error', err.message);
+        }
+      } else {
+        showNotification('error', 'Failed to delete book. Please try again.');
+      }
+    } finally {
+      setIsOperationLoading(false);
     }
   };
 
-  const handleIssueBook = () => {
-    if (issueData.isbn && issueData.userUsn && issueData.dueDate) {
-      console.log('Issuing book:', issueData);
-      // In a real app, this would make an API call
+  const handleIssueBook = async () => {
+    if (!user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    if (!issueData.isbn.trim() || !issueData.userUsn.trim() || !issueData.dueDate) {
+      showNotification('error', 'All fields (ISBN, USN, Due Date) are required');
+      return;
+    }
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Find book by ISBN
+      const book = books.find(b => b.isbn === issueData.isbn.trim());
+      if (!book) {
+        showNotification('error', 'Book not found with this ISBN');
+        setIsOperationLoading(false);
+        return;
+      }
+      if (!book.is_available) {
+        showNotification('error', 'This book is currently not available for issue.');
+        setIsOperationLoading(false);
+        return;
+      }
+
+      // Find user by USN
+      const foundUser = users.find(u => u.usn === issueData.userUsn.trim());
+      if (!foundUser) {
+        showNotification('error', 'User not found with this USN');
+        setIsOperationLoading(false);
+        return;
+      }
+
+      const issuePayload: IssueBookPayload = {
+        book_id: book.id,
+        user_id: foundUser.id,
+        due_date: new Date(issueData.dueDate).toISOString()
+      };
+
+      await issueBook(token, issuePayload);
+      showNotification('success', 'Book issued successfully');
       setIssueData({
         isbn: '',
         userUsn: '',
         dueDate: ''
       });
       setShowIssueModal(false);
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to issue book:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('already issued to this user')) {
+          showNotification('error', 'This book is already issued to this user.');
+        } else if (err.message.includes('not available')) {
+          showNotification('error', 'This book is not available for issue.');
+        } else if (err.message.includes('not found')) {
+          showNotification('error', 'Book or User not found.');
+        } else if (err.message.includes('401')) {
+          showNotification('error', 'Authentication expired. Please log in again.');
+        } else if (err.message.includes('403')) {
+          showNotification('error', 'Access denied. You do not have permission to issue books.');
+        } else if (err.message.includes('Network')) {
+          showNotification('error', 'Network error. Please check your connection and try again.');
+        } else {
+          showNotification('error', err.message);
+        }
+      } else {
+        showNotification('error', 'Failed to issue book. Please try again.');
+      }
+    } finally {
+      setIsOperationLoading(false);
     }
   };
 
-  const handleReturnBook = (book: any) => {
+  const handleReturnBook = (book: Book) => {
     setSelectedBook(book);
     setReturnData({
       isbn: book.isbn,
-      userUsn: '',
+      userUsn: '', // USN needs to be entered by admin, not necessarily pre-filled
       condition: 'good',
       notes: ''
     });
     setShowReturnModal(true);
   };
 
-  const confirmReturnBook = () => {
-    if (returnData.isbn && returnData.userUsn) {
-      console.log('Returning book:', {
-        ...returnData,
-        bookId: selectedBook?.id,
-        returnDate: new Date().toISOString()
-      });
-      // In a real app, this would make an API call to:
-      // 1. Update book status to available
-      // 2. Record return in book history
-      // 3. Calculate any fines if overdue
-      // 4. Update shelf capacity
-      
+  const confirmReturnBook = async () => {
+    if (!user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    if (!selectedBook || !returnData.isbn.trim() || !returnData.userUsn.trim()) {
+      showNotification('error', 'Missing required information (Book, ISBN, USN)');
+      return;
+    }
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Find user by USN
+      const foundUser = users.find(u => u.usn === returnData.userUsn.trim());
+      if (!foundUser) {
+        showNotification('error', 'User not found with this USN');
+        setIsOperationLoading(false);
+        return;
+      }
+
+      const returnPayload: ReturnBookPayload = {
+        book_id: selectedBook.id,
+        user_id: foundUser.id,
+        condition: returnData.condition,
+        notes: returnData.notes.trim()
+      };
+
+      await returnBook(token, returnPayload);
+      showNotification('success', 'Book returned successfully');
       setReturnData({
         isbn: '',
         userUsn: '',
@@ -168,15 +581,79 @@ const BookManagement: React.FC = () => {
       });
       setShowReturnModal(false);
       setSelectedBook(null);
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to return book:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('not currently issued to this user')) {
+          showNotification('error', 'This book is not currently issued to this user.');
+        } else if (err.message.includes('not found')) {
+          showNotification('error', 'Book or User not found.');
+        } else if (err.message.includes('401')) {
+          showNotification('error', 'Authentication expired. Please log in again.');
+        } else if (err.message.includes('403')) {
+          showNotification('error', 'Access denied. You do not have permission to return books.');
+        } else if (err.message.includes('Network')) {
+          showNotification('error', 'Network error. Please check your connection and try again.');
+        } else {
+          showNotification('error', err.message);
+        }
+      } else {
+        showNotification('error', 'Failed to return book. Please try again.');
+      }
+    } finally {
+      setIsOperationLoading(false);
     }
   };
+
+  let searchTimeout: ReturnType<typeof setTimeout>;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 md:space-y-8">
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl md:rounded-2xl p-6 md:p-8 text-white">
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">Book Management</h1>
+          <p className="text-emerald-100 text-sm md:text-base">Loading book data...</p>
+        </div>
+        <div className="flex justify-center items-center p-12">
+          <Loader className="w-8 h-8 animate-spin text-emerald-600" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6 md:space-y-8">
+        <div className="bg-gradient-to-r from-red-600 to-orange-600 rounded-xl md:rounded-2xl p-6 md:p-8 text-white">
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">Error Loading Books</h1>
+          <p className="text-red-100 text-sm md:text-base mb-4">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-white text-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Retry</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 md:space-y-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl md:rounded-2xl p-6 md:p-8 text-white">
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl md:rounded-2xl p-6 md:p-8 text-white relative">
         <h1 className="text-2xl md:text-3xl font-bold mb-2">Book Management</h1>
         <p className="text-emerald-100 text-sm md:text-base">Manage your library's book collection and inventory</p>
+        <button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="absolute top-4 right-4 p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50"
+          title="Refresh Data"
+        >
+          <RefreshCw className={`w-4 h-4 text-white ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Controls */}
@@ -190,9 +667,20 @@ const BookManagement: React.FC = () => {
                 type="text"
                 placeholder="Search books by title, author, or ISBN..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  clearTimeout(searchTimeout);
+                  searchTimeout = setTimeout(() => {
+                    handleSearch(e.target.value);
+                  }, 300);
+                }}
                 className="w-full pl-9 md:pl-10 pr-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
               />
+              {isSearching && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <Loader className="w-4 h-4 animate-spin text-gray-400" />
+                </div>
+              )}
             </div>
 
             {/* Filter */}
@@ -213,21 +701,21 @@ const BookManagement: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => { setShowAddModal(true); setFormErrors({}); setNewBook({ title: '', author: '', isbn: '', genre: '', rackId: '', shelfId: '' });}}
               className="flex items-center justify-center space-x-2 bg-emerald-600 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg hover:bg-emerald-700 transition-colors duration-200 text-sm md:text-base"
             >
               <Plus className="w-4 h-4 md:w-5 md:h-5" />
               <span>Add Book</span>
             </button>
             <button
-              onClick={() => setShowIssueModal(true)}
+              onClick={() => { setShowIssueModal(true); setIssueData({ isbn: '', userUsn: '', dueDate: '' });}}
               className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm md:text-base"
             >
               <BookOpen className="w-4 h-4 md:w-5 md:h-5" />
               <span>Issue Book</span>
             </button>
             <button
-              onClick={() => setShowReturnModal(true)}
+              onClick={() => { setShowReturnModal(true); setSelectedBook(null); setReturnData({ isbn: '', userUsn: '', condition: 'good', notes: '' });}}
               className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg hover:bg-purple-700 transition-colors duration-200 text-sm md:text-base"
             >
               <RotateCcw className="w-4 h-4 md:w-5 md:h-5" />
@@ -243,41 +731,45 @@ const BookManagement: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs md:text-sm font-medium text-gray-600">Total Books</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{mockBooks.length}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">
+                {isOperationLoading ? <Loader className="w-6 h-6 animate-spin" /> : totalBooks || 0}
+              </p>
             </div>
             <BookOpen className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs md:text-sm font-medium text-gray-600">Available</p>
               <p className="text-xl md:text-2xl font-bold text-emerald-600">
-                {mockBooks.filter(book => book.isAvailable).length}
+                {isOperationLoading ? <Loader className="w-6 h-6 animate-spin" /> : (Array.isArray(books) ? books.filter(book => book && book.is_available).length : 0)}
               </p>
             </div>
             <CheckCircle className="w-6 h-6 md:w-8 md:h-8 text-emerald-600" />
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs md:text-sm font-medium text-gray-600">Issued</p>
               <p className="text-xl md:text-2xl font-bold text-amber-600">
-                {mockBooks.filter(book => !book.isAvailable).length}
+                {isOperationLoading ? <Loader className="w-6 h-6 animate-spin" /> : (Array.isArray(books) ? books.filter(book => book && !book.is_available).length : 0)}
               </p>
             </div>
             <Clock className="w-6 h-6 md:w-8 md:h-8 text-amber-600" />
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs md:text-sm font-medium text-gray-600">Total Racks</p>
-              <p className="text-xl md:text-2xl font-bold text-purple-600">{mockRacks.length}</p>
+              <p className="text-xl md:text-2xl font-bold text-purple-600">
+                {isOperationLoading ? <Loader className="w-6 h-6 animate-spin" /> : (Array.isArray(racks) ? racks.length : 0)}
+              </p>
             </div>
             <Package className="w-6 h-6 md:w-8 md:h-8 text-purple-600" />
           </div>
@@ -288,10 +780,10 @@ const BookManagement: React.FC = () => {
       <div className="bg-white rounded-lg md:rounded-xl shadow-lg overflow-hidden">
         <div className="p-4 md:p-6 border-b border-gray-200">
           <h3 className="text-base md:text-lg font-semibold text-gray-900">
-            Books ({filteredBooks.length})
+            Books ({Array.isArray(filteredBooks) ? filteredBooks.length : 0})
           </h3>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -314,72 +806,115 @@ const BookManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredBooks.map((book) => (
-                <tr key={book.id} className="hover:bg-gray-50">
-                  <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{book.title}</div>
-                      <div className="text-sm text-gray-500">by {book.author}</div>
-                      <div className="text-xs text-gray-400">{book.genre}</div>
-                    </div>
-                  </td>
-                  <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{getRackName(book.rackId)}</div>
-                    <div className="text-sm text-gray-500">{getShelfName(book.shelfId)}</div>
-                  </td>
-                  <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                    <div className={`flex items-center space-x-2 ${getStatusColor(book.isAvailable)}`}>
-                      {getStatusIcon(book.isAvailable)}
-                      <span className="text-sm font-medium">
-                        {book.isAvailable ? 'Available' : 'Issued'}
-                      </span>
-                    </div>
-                    {!book.isAvailable && book.returnDate && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Due: {new Date(book.returnDate).toLocaleDateString()}
+              {filteredBooks.map((book) => {
+                // Defensive checks for book object and required properties
+                if (!book || typeof book !== 'object' || !book.id) return null;
+                
+                return (
+                  <tr key={book.id} className="hover:bg-gray-50">
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{book.title || 'Unknown Title'}</div>
+                        <div className="text-sm text-gray-500">by {book.author || 'Unknown Author'}</div>
+                        <div className="text-xs text-gray-400">{book.genre || 'Unknown Genre'}</div>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {book.isbn}
-                  </td>
-                  <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-1 md:space-x-2">
-                      <button 
-                        onClick={() => handleEditBook(book)}
-                        className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
-                        title="Edit Book"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      {!book.isAvailable && (
-                        <button 
-                          onClick={() => handleReturnBook(book)}
-                          className="text-purple-600 hover:text-purple-900 p-1 hover:bg-purple-50 rounded"
-                          title="Return Book"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </button>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{book.rack_id ? getRackName(book.rack_id) : 'Unknown'}</div>
+                      <div className="text-sm text-gray-500">{book.shelf_id ? getShelfName(book.shelf_id) : 'Unknown'}</div>
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                      <div className={`flex items-center space-x-2 ${getStatusColor(Boolean(book.is_available))}`}>
+                        {getStatusIcon(Boolean(book.is_available))}
+                        <span className="text-sm font-medium">
+                          {book.is_available ? 'Available' : 'Issued'}
+                        </span>
+                      </div>
+                      {!book.is_available && book.return_date && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Due: {new Date(book.return_date).toLocaleDateString()}
+                        </div>
                       )}
-                      <button 
-                        onClick={() => handleDeleteBook(book)}
-                        className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
-                        title="Delete Book"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {book.isbn || 'N/A'}
+                    </td>
+                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-1 md:space-x-2">
+                        <button
+                          onClick={() => handleEditBook(book)}
+                          disabled={isOperationLoading}
+                          className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
+                          title="Edit Book"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        {!Boolean(book.is_available) && (
+                          <button
+                            onClick={() => handleReturnBook(book)}
+                            disabled={isOperationLoading}
+                            className="text-purple-600 hover:text-purple-900 p-1 hover:bg-purple-50 rounded disabled:opacity-50"
+                            title="Return Book"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteBook(book)}
+                          disabled={isOperationLoading}
+                          className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded disabled:opacity-50"
+                          title="Delete Book"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }).filter(Boolean)}
             </tbody>
           </table>
         </div>
-        
+
         {filteredBooks.length === 0 && (
           <div className="text-center py-8 md:py-12">
             <BookOpen className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 text-sm md:text-base">No books found matching your criteria.</p>
+          </div>
+        )}
+        {/* Pagination Controls */}
+        {!searchTerm && totalBooks > itemsPerPage && (
+          <div className="px-4 md:px-6 py-4 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Showing {Math.min(currentPage * itemsPerPage + 1, totalBooks || 0)} to {Math.min((currentPage + 1) * itemsPerPage, totalBooks || 0)} of {totalBooks || 0} books
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => {
+                    setCurrentPage(prev => Math.max(0, prev - 1));
+                    setRefreshKey(prev => prev + 1);
+                  }}
+                  disabled={currentPage === 0 || isLoading}
+                  className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-2 text-sm text-gray-700 font-medium">
+                  Page {currentPage + 1} of {Math.max(1, Math.ceil(totalBooks / itemsPerPage))}
+                </span>
+                <button
+                  onClick={() => {
+                    setCurrentPage(prev => Math.min(Math.ceil(totalBooks / itemsPerPage) - 1, prev + 1));
+                    setRefreshKey(prev => prev + 1);
+                  }}
+                  disabled={currentPage >= Math.ceil(totalBooks / itemsPerPage) - 1 || isLoading}
+                  className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -405,8 +940,8 @@ const BookManagement: React.FC = () => {
                   <div><span className="font-medium">Title:</span> {selectedBook.title}</div>
                   <div><span className="font-medium">Author:</span> {selectedBook.author}</div>
                   <div><span className="font-medium">ISBN:</span> {selectedBook.isbn}</div>
-                  {selectedBook.returnDate && (
-                    <div><span className="font-medium">Due Date:</span> {new Date(selectedBook.returnDate).toLocaleDateString()}</div>
+                  {selectedBook.return_date && (
+                    <div><span className="font-medium">Due Date:</span> {new Date(selectedBook.return_date).toLocaleDateString()}</div>
                   )}
                 </div>
               </div>
@@ -424,7 +959,7 @@ const BookManagement: React.FC = () => {
                   disabled={!!selectedBook}
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Student USN</label>
                 <input
@@ -467,7 +1002,7 @@ const BookManagement: React.FC = () => {
                     <div className="text-sm text-amber-800">
                       <p className="font-medium">Additional Action Required</p>
                       <p className="mt-1">
-                        {returnData.condition === 'damaged' 
+                        {returnData.condition === 'damaged'
                           ? 'This book is marked as damaged. Additional fees may apply.'
                           : 'This book is marked as lost. Replacement fees will be charged.'
                         }
@@ -487,9 +1022,11 @@ const BookManagement: React.FC = () => {
               </button>
               <button
                 onClick={confirmReturnBook}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm md:text-base"
+                disabled={isOperationLoading}
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm md:text-base disabled:opacity-50 flex items-center space-x-2"
               >
-                Process Return
+                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
+                <span>Process Return</span>
               </button>
             </div>
           </div>
@@ -519,6 +1056,7 @@ const BookManagement: React.FC = () => {
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                   placeholder="Enter book title"
                 />
+                {formErrors.title && <p className="mt-1 text-red-500 text-xs">{formErrors.title}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Author</label>
@@ -529,6 +1067,7 @@ const BookManagement: React.FC = () => {
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                   placeholder="Enter author name"
                 />
+                {formErrors.author && <p className="mt-1 text-red-500 text-xs">{formErrors.author}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">ISBN</label>
@@ -539,6 +1078,7 @@ const BookManagement: React.FC = () => {
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                   placeholder="Enter ISBN"
                 />
+                {formErrors.isbn && <p className="mt-1 text-red-500 text-xs">{formErrors.isbn}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Genre</label>
@@ -549,6 +1089,7 @@ const BookManagement: React.FC = () => {
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                   placeholder="Enter genre"
                 />
+                {formErrors.genre && <p className="mt-1 text-red-500 text-xs">{formErrors.genre}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Rack</label>
@@ -558,10 +1099,11 @@ const BookManagement: React.FC = () => {
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                 >
                   <option value="">Select a rack</option>
-                  {mockRacks.map((rack) => (
-                    <option key={rack.id} value={rack.id}>{rack.name}</option>
+                  {racks.map((rack) => (
+                    <option key={rack.id} value={rack.id.toString()}>{rack.name}</option>
                   ))}
                 </select>
+                {formErrors.rack_id && <p className="mt-1 text-red-500 text-xs">{formErrors.rack_id}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Shelf</label>
@@ -572,12 +1114,13 @@ const BookManagement: React.FC = () => {
                   disabled={!newBook.rackId}
                 >
                   <option value="">Select a shelf</option>
-                  {newBook.rackId && getAvailableShelves(newBook.rackId).map((shelf) => (
-                    <option key={shelf.id} value={shelf.id}>
-                      {shelf.name} ({shelf.currentBooks}/{shelf.capacity})
+                  {newBook.rackId && getAvailableShelves(parseInt(newBook.rackId)).map((shelf) => (
+                    <option key={shelf.id} value={shelf.id.toString()}>
+                      {shelf.name} ({shelf.current_books}/{shelf.capacity})
                     </option>
                   ))}
                 </select>
+                {formErrors.shelf_id && <p className="mt-1 text-red-500 text-xs">{formErrors.shelf_id}</p>}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
@@ -589,9 +1132,11 @@ const BookManagement: React.FC = () => {
               </button>
               <button
                 onClick={handleAddBook}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm md:text-base"
+                disabled={isOperationLoading}
+                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm md:text-base disabled:opacity-50 flex items-center space-x-2"
               >
-                Add Book
+                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
+                <span>Add Book</span>
               </button>
             </div>
           </div>
@@ -620,6 +1165,7 @@ const BookManagement: React.FC = () => {
                   onChange={(e) => setSelectedBook({ ...selectedBook, title: e.target.value })}
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                 />
+                {formErrors.title && <p className="mt-1 text-red-500 text-xs">{formErrors.title}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Author</label>
@@ -629,6 +1175,7 @@ const BookManagement: React.FC = () => {
                   onChange={(e) => setSelectedBook({ ...selectedBook, author: e.target.value })}
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                 />
+                {formErrors.author && <p className="mt-1 text-red-500 text-xs">{formErrors.author}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">ISBN</label>
@@ -648,35 +1195,38 @@ const BookManagement: React.FC = () => {
                   onChange={(e) => setSelectedBook({ ...selectedBook, genre: e.target.value })}
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                 />
+                {formErrors.genre && <p className="mt-1 text-red-500 text-xs">{formErrors.genre}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Rack</label>
                 <select
-                  value={selectedBook.rackId}
-                  onChange={(e) => setSelectedBook({ ...selectedBook, rackId: e.target.value, shelfId: '' })}
+                  value={selectedBook.rack_id.toString()}
+                  onChange={(e) => setSelectedBook({ ...selectedBook, rack_id: parseInt(e.target.value), shelf_id: 0 })}
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
                 >
                   <option value="">Select a rack</option>
-                  {mockRacks.map((rack) => (
-                    <option key={rack.id} value={rack.id}>{rack.name}</option>
+                  {racks.map((rack) => (
+                    <option key={rack.id} value={rack.id.toString()}>{rack.name}</option>
                   ))}
                 </select>
+                {formErrors.rack_id && <p className="mt-1 text-red-500 text-xs">{formErrors.rack_id}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Shelf</label>
                 <select
-                  value={selectedBook.shelfId}
-                  onChange={(e) => setSelectedBook({ ...selectedBook, shelfId: e.target.value })}
+                  value={selectedBook.shelf_id.toString()}
+                  onChange={(e) => setSelectedBook({ ...selectedBook, shelf_id: parseInt(e.target.value) })}
                   className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
-                  disabled={!selectedBook.rackId}
+                  disabled={!selectedBook.rack_id}
                 >
                   <option value="">Select a shelf</option>
-                  {selectedBook.rackId && getAvailableShelves(selectedBook.rackId).map((shelf) => (
-                    <option key={shelf.id} value={shelf.id}>
-                      {shelf.name} ({shelf.currentBooks}/{shelf.capacity})
+                  {selectedBook.rack_id && getAvailableShelves(selectedBook.rack_id).map((shelf) => (
+                    <option key={shelf.id} value={shelf.id.toString()}>
+                      {shelf.name} ({shelf.current_books}/{shelf.capacity})
                     </option>
                   ))}
                 </select>
+                {formErrors.shelf_id && <p className="mt-1 text-red-500 text-xs">{formErrors.shelf_id}</p>}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
@@ -688,9 +1238,11 @@ const BookManagement: React.FC = () => {
               </button>
               <button
                 onClick={handleUpdateBook}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm md:text-base"
+                disabled={isOperationLoading}
+                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm md:text-base disabled:opacity-50 flex items-center space-x-2"
               >
-                Update Book
+                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
+                <span>Update Book</span>
               </button>
             </div>
           </div>
@@ -727,9 +1279,11 @@ const BookManagement: React.FC = () => {
               </button>
               <button
                 onClick={confirmDeleteBook}
-                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm md:text-base"
+                disabled={isOperationLoading}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm md:text-base disabled:opacity-50 flex items-center space-x-2"
               >
-                Delete Book
+                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
+                <span>Delete Book</span>
               </button>
             </div>
           </div>
@@ -789,11 +1343,38 @@ const BookManagement: React.FC = () => {
               </button>
               <button
                 onClick={handleIssueBook}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm md:text-base"
+                disabled={isOperationLoading}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm md:text-base disabled:opacity-50 flex items-center space-x-2"
               >
-                Issue Book
+                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
+                <span>Issue Book</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
+          notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          <div className="flex items-center space-x-2">
+            {notification.type === 'success' ? (
+              <CheckCircle className="w-5 h-5" />
+            ) : (
+              <AlertTriangle className="w-5 h-5" />
+            )}
+            <span className="text-sm font-medium">{notification.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {isOperationLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <Loader className="w-6 h-6 animate-spin text-emerald-600" />
+            <span className="text-gray-700">Processing...</span>
           </div>
         </div>
       )}
