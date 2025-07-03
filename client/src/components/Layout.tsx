@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { 
-  BookOpen, 
-  LayoutDashboard, 
-  Users, 
-  Package, 
-  BarChart3, 
-  User, 
-  LogOut, 
+import {
+  BookOpen,
+  LayoutDashboard,
+  Users,
+  Package,
+  BarChart3,
+  User,
+  LogOut,
   Menu,
   X,
   History,
   AlertTriangle,
-  Layers,
-  Grid,
   Loader2,
   Bell
 } from 'lucide-react';
@@ -29,14 +27,14 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  
+
   useEffect(() => {
     // Simulate loading transition when page changes
     setPageLoading(true);
     const timer = setTimeout(() => {
       setPageLoading(false);
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, [currentPage]);
 
@@ -63,8 +61,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     { id: 'books', label: 'Books', icon: BookOpen },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'inventory', label: 'Inventory', icon: Package },
-    { id: 'racks', label: 'Racks', icon: Layers },
-    { id: 'shelves', label: 'Shelves', icon: Grid },
     { id: 'overdue', label: 'Overdue & Fines', icon: AlertTriangle },
     { id: 'reports', label: 'Reports', icon: BarChart3 }
   ];
@@ -92,7 +88,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
         />
@@ -143,7 +139,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
-              
+
               return (
                 <button
                   key={item.id}
@@ -153,8 +149,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
                   }}
                   className={`
                     w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-all duration-200 group text-base
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm border-l-4 border-blue-500' 
+                    ${isActive
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm border-l-4 border-blue-500'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-sm'
                     }
                   `}
@@ -199,7 +195,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
                 <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-emerald-600">Library</span>
               </div>
             </div>
-            
+
             {/* Right side items */}
             <div className="flex items-center space-x-4">
               {/* Notifications */}
@@ -213,7 +209,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
                   )}
                 </button>
               </div>
-              
+
               {/* User info in header for larger screens */}
               <div className="hidden md:flex items-center space-x-3">
                 <div className="w-9 h-9 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-sm">
@@ -238,19 +234,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
             </div>
           )}
-          
-          {/* Page title */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900 capitalize">
-              {currentPage === 'dashboard' ? 
-                (user.role === 'admin' ? 'Admin Dashboard' : 'Library Dashboard') : 
-                currentPage}
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-          
+
           {/* Page content */}
           <div className="bg-white shadow-sm rounded-lg p-4 md:p-6 border border-gray-100">
             {children}

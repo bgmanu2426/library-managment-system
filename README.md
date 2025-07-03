@@ -10,9 +10,11 @@ A comprehensive library management system with a React frontend and FastAPI back
 - [Environment Configuration](#environment-configuration)
 - [Development](#development)
 - [API Documentation](#api-documentation)
-- [Deployment](#deployment)
+- [Docker Deployment](#docker-deployment)
+- [Cloud Deployment](#cloud-deployment)
 - [Security](#security)
 - [Contributing](#contributing)
+- [References](#references)
 
 ## Features
 
@@ -188,20 +190,65 @@ Once the backend server is running, API documentation is available at:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-## Deployment
+## Docker Deployment
 
-### Docker Deployment
+### Building and Running with Docker
 
-Docker configuration files are provided in the server directory. To deploy using Docker:
+When you're ready to run the application with Docker, start by building and running:
 
 ```bash
 cd server
+docker compose up --build
+```
+
+Your application will be available at http://localhost:8000.
+
+### Docker Build Options
+
+For development:
+```bash
 docker compose up -d
 ```
 
+For building a specific image:
+```bash
+docker build -t library-management-system .
+```
+
+## Cloud Deployment
+
+### Preparing for Cloud Deployment
+
+First, build your image for the target platform:
+
+```bash
+# For amd64 architecture (most cloud providers)
+docker build --platform=linux/amd64 -t library-management-system .
+```
+
+### Pushing to Registry
+
+Push the built image to your container registry:
+
+```bash
+# Example for Docker Hub
+docker tag library-management-system myregistry.com/library-management-system
+docker push myregistry.com/library-management-system
+```
+
+### Environment Configuration for Cloud
+
+For cloud deployment, ensure you:
+
+1. Set proper environment variables in your cloud service
+2. Use secrets management for sensitive data like `SECRET_KEY`
+3. Configure appropriate `ALLOWED_ORIGINS` for your domain
+4. Set `ENVIRONMENT=production`
+5. Use a production database instead of SQLite for scalability
+
 ### Manual Deployment
 
-For manual deployment, follow the environment configuration guidelines above for the specific target environment.
+For manual deployment without Docker, follow the environment configuration guidelines above for the specific target environment.
 
 ## Security
 
@@ -218,3 +265,12 @@ For manual deployment, follow the environment configuration guidelines above for
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## References
+
+- [Docker's Python guide](https://docs.docker.com/language/python/)
+- [Docker's getting started docs](https://docs.docker.com/go/get-started-sharing/)
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [React Documentation](https://react.dev/)
+- [Vite Documentation](https://vitejs.dev/)
+- [TailwindCSS Documentation](https://tailwindcss.com/)

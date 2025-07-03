@@ -29,7 +29,7 @@ ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme for token authentication with more flexible URL pattern
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/admin/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # Password hashing functions
 def hash_password(password: str) -> str:
@@ -144,7 +144,7 @@ async def get_current_user(request: Request, token: Optional[str] = Depends(oaut
     
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="User not logged in or token is invalid",
         headers={"WWW-Authenticate": "Bearer"},
     )
     
