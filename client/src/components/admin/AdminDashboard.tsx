@@ -652,34 +652,7 @@ const AdminDashboard: React.FC = () => {
             )}
           </div>
         </div>
-
-        {/* Overdue Books Summary */}
-        {stats.overdue_books > 0 && (
-          <div onClick={handleOverdueClick} className={`bg-white rounded-lg lg:rounded-xl shadow-lg p-4 sm:p-6 border-l-4 border-red-500 cursor-pointer hover:shadow-xl transition-shadow`}>
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="p-2 sm:p-3 bg-red-100 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900">
-                  Overdue Books Alert
-                </h3>
-                <p className="text-xs sm:text-sm text-gray-600">
-                  {stats.overdue_books} books require immediate attention
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="text-xs sm:text-sm text-gray-600">
-                <span className="inline-block px-2 py-1 bg-red-100 text-red-700 rounded mr-2">
-                  Status: {overdueStatus.status}
-                </span>
-                Click to view overdue management
-              </div>
-              <TrendingUp className="w-4 h-4 text-red-500" />
-            </div>
-          </div>
-        )}
+        
       </div>
     </ErrorBoundary>
   );

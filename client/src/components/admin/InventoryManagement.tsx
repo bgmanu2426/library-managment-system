@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   X,
   RefreshCw,
+  IterationCw,
   Loader,
   Book,
   User,
@@ -666,7 +667,7 @@ const InventoryManagement: React.FC = () => {
           onClick={() => setShowReturnModal(true)}
           className="flex items-center justify-center space-x-2 bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 transition-colors"
         >
-          <CheckCircle className="w-5 h-5" />
+          <IterationCw className="w-5 h-5" />
           <span>Return Book</span>
         </button>
         <button
@@ -811,7 +812,7 @@ const InventoryManagement: React.FC = () => {
                             className="text-emerald-600 hover:text-emerald-900 p-1 hover:bg-emerald-50 rounded disabled:opacity-50"
                             title="Return Book"
                           >
-                            <CheckCircle className="w-4 h-4" />
+                            <IterationCw className="w-4 h-4" />
                           </button>
                         )}
                       </div>

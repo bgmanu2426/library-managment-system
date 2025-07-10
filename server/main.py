@@ -5,6 +5,7 @@ load_dotenv()
 
 import os
 import logging
+import logging_config
 import time
 import re
 import json
@@ -22,13 +23,9 @@ from seed_data import initialize_database
 from routers import admin, user, overdue, reports, auth
 from auth import get_current_user  # Import authentication dependency
 
-# Configure logging for API debugging
-log_level = os.getenv("LOG_LEVEL", "DEBUG").upper()
-logging.basicConfig(
-    level=getattr(logging, log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-)
-logger = logging.getLogger("library_api")
+# Initialize logging system
+logging_config.setup_logging()
+api_logger = logging_config.get_logger('api')
 
 # Create FastAPI application
 app = FastAPI(
@@ -43,26 +40,26 @@ def get_allowed_origins() -> List[str]:
     # Get origins from environment variable
     origins_env = os.getenv("ALLOWED_ORIGINS", "")
     if origins_env:
-        logger.info(f"Using ALLOWED_ORIGINS from environment: {origins_env}")
+        api_logger.info(f"Using ALLOWED_ORIGINS from environment: {origins_env}")
         return [origin.strip() for origin in origins_env.split(",")]
     
     # Check for environment-specific configurations
     environment = os.getenv("ENVIRONMENT", "development").lower()
     
     if environment == "production":
-        logger.info("Using production CORS configuration")
+        api_logger.info("Using production CORS configuration")
         return [
             "https://library.yourdomain.com",
             "https://www.library.yourdomain.com"
         ]
     elif environment == "staging":
-        logger.info("Using staging CORS configuration")
+        api_logger.info("Using staging CORS configuration")
         return [
             "https://staging.library.yourdomain.com",
             "https://test.library.yourdomain.com"
         ]
     elif environment == "clacky" or os.getenv("CLACKY_ENABLED", "false").lower() == "true":
-        logger.info("Using Clacky environment CORS configuration")
+        api_logger.info("Using Clacky environment CORS configuration")
         clacky_pattern = os.getenv("CLACKY_HOSTNAME_PATTERN", "clackypaas.com")
         return [
             "http://localhost:5173",
@@ -85,7 +82,7 @@ def get_allowed_origins() -> List[str]:
         ]
     
     # Default origins for development
-    logger.info("Using default development CORS configuration")
+    api_logger.info("Using default development CORS configuration")
     return [
         "http://localhost:5173",
         "http://localhost:3000",
@@ -131,18 +128,19 @@ def get_clacky_origin_regex() -> str:
     
     # Combine patterns
     combined_pattern = "|".join(patterns)
-    logger.info(f"Using CORS regex pattern: {combined_pattern}")
+    api_logger.info(f"Using CORS regex pattern: {combined_pattern}")
     
     return combined_pattern
 
 # Custom CORS middleware to handle wildcard subdomains and dynamic origins
 class CustomCORSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        correlation_id = logging_config.get_correlation_id()
         origin = request.headers.get("origin")
         
         # Handle CORS preflight OPTIONS request
         if request.method == "OPTIONS" and origin:
-            logger.debug(f"Handling CORS preflight for origin: {origin}")
+            logging_config.log_api_operation(f"Handling CORS preflight for origin: {origin}", correlation_id=correlation_id)
             
             # Create preflight response
             response = Response(status_code=204)
@@ -174,7 +172,7 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
             if allowed:
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Credentials"] = "true"
-                logger.debug(f"CORS headers added for origin: {origin}")
+                logging_config.log_api_operation(f"CORS headers added for origin: {origin}", correlation_id=correlation_id)
         
         return response
 
@@ -209,16 +207,16 @@ app.add_middleware(CustomCORSMiddleware)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    request_id = str(int(time.time() * 1000))  # Generate a simple request ID
+    correlation_id = logging_config.get_correlation_id()
     
     # Skip verbose logging for OPTIONS requests (preflight)
     if request.method == "OPTIONS":
-        logger.debug(f"[{request_id}] CORS Preflight request received for {request.url.path}")
+        logging_config.log_api_operation(f"CORS Preflight request received for {request.url.path}", correlation_id=correlation_id)
         response = await call_next(request)
         return response
     
     # Log request path and method
-    logger.debug(f"[{request_id}] Request: {request.method} {request.url.path}")
+    logging_config.log_api_operation(f"Request: {request.method} {request.url.path}", correlation_id=correlation_id)
     
     # Log authentication headers for debugging (redacted for security)
     auth_header = request.headers.get("Authorization")
@@ -227,46 +225,46 @@ async def log_requests(request: Request, call_next):
         match = re.match(r"(Bearer)\s+(.{1,10}).*", auth_header)
         if match:
             token_type, token_preview = match.groups()
-            logger.debug(f"[{request_id}] Auth: {token_type} {token_preview}...")
+            logging_config.log_api_operation(f"Auth: {token_type} {token_preview}...", correlation_id=correlation_id)
         else:
-            logger.debug(f"[{request_id}] Auth header present but in unexpected format")
+            logging_config.log_api_operation(f"Auth header present but in unexpected format", correlation_id=correlation_id)
     else:
-        logger.debug(f"[{request_id}] No Authorization header present")
+        logging_config.log_api_operation(f"No Authorization header present", correlation_id=correlation_id)
     
     # Log request details including origin for CORS debugging
     origin = request.headers.get("origin")
     if origin:
-        logger.debug(f"[{request_id}] Request origin: {origin}")
+        logging_config.log_api_operation(f"Request origin: {origin}", correlation_id=correlation_id)
         
         # Special handling for Clacky environment
         if is_clacky_environment():
             clacky_pattern = os.getenv("CLACKY_HOSTNAME_PATTERN", "clackypaas.com")
             if clacky_pattern in origin or "1024.sh" in origin:
-                logger.info(f"[{request_id}] Detected Clacky request from origin: {origin}")
+                api_logger.info(f"[{correlation_id}] Detected Clacky request from origin: {origin}")
             # Specific handling for numbered subdomain format
             elif re.search(r'[0-9]+-[0-9a-f]+-web\.clackypaas\.com', origin):
-                logger.info(f"[{request_id}] Detected Clacky numbered subdomain request from: {origin}")
+                api_logger.info(f"[{correlation_id}] Detected Clacky numbered subdomain request from: {origin}")
     
     # Log relevant headers for debugging CORS and auth issues
     debug_headers = {
         k: v for k, v in request.headers.items() 
         if k.lower() in ["origin", "referer", "host", "x-forwarded-for", "user-agent"]
     }
-    logger.debug(f"[{request_id}] Request headers: {debug_headers}")
+    logging_config.log_api_operation(f"Request headers: {debug_headers}", correlation_id=correlation_id)
     
     # Process the request
     try:
         response = await call_next(request)
         process_time = time.time() - start_time
         
-        # Log response details
-        logger.info(f"[{request_id}] {request.method} {request.url.path} - {response.status_code} - {process_time:.4f}s")
+        # Log response details with performance metrics
+        logging_config.log_performance(api_logger, f"{request.method} {request.url.path} - {response.status_code}", process_time, correlation_id)
         
         # Enhanced logging for authentication/authorization issues
         if response.status_code == 401:
-            logger.warning(f"[{request_id}] Authentication failed for {request.method} {request.url.path}")
+            api_logger.warning(f"[{correlation_id}] Authentication failed for {request.method} {request.url.path}")
         elif response.status_code == 403:
-            logger.warning(f"[{request_id}] Authorization failed for {request.method} {request.url.path}")
+            api_logger.warning(f"[{correlation_id}] Authorization failed for {request.method} {request.url.path}")
         
         # Add CORS headers to every response to ensure proper handling
         response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -278,14 +276,14 @@ async def log_requests(request: Request, call_next):
             
             # Add additional debug headers in development
             if os.getenv("ENVIRONMENT") == "development":
-                response.headers["X-Request-ID"] = request_id
+                response.headers["X-Request-ID"] = correlation_id
         
         return response
     except Exception as e:
         # Log unexpected errors during request processing
-        logger.error(f"[{request_id}] Error during request processing: {str(e)}", exc_info=True)
+        logging_config.log_error(api_logger, f"Error during request processing: {str(e)}", correlation_id=correlation_id)
         process_time = time.time() - start_time
-        logger.info(f"[{request_id}] {request.method} {request.url.path} - 500 - {process_time:.4f}s")
+        logging_config.log_performance(api_logger, f"{request.method} {request.url.path} - 500", process_time, correlation_id)
         
         # Create a standardized error response
         error_detail = str(e)
@@ -308,21 +306,22 @@ async def log_requests(request: Request, call_next):
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
     """Handle OPTIONS requests (CORS preflight) with appropriate headers."""
+    correlation_id = logging_config.get_correlation_id()
     response = Response(status_code=204)  # No content
     
     # Get the request origin
     origin = request.headers.get("origin", "")
-    logger.debug(f"Processing OPTIONS request from origin: {origin}")
+    logging_config.log_api_operation(f"Processing OPTIONS request from origin: {origin}", correlation_id=correlation_id)
     
     # Get the requested method for the preflight
     requested_method = request.headers.get("access-control-request-method", "")
     if requested_method:
-        logger.debug(f"Preflight requested method: {requested_method}")
+        logging_config.log_api_operation(f"Preflight requested method: {requested_method}", correlation_id=correlation_id)
     
     # Get the requested headers for the preflight
     requested_headers = request.headers.get("access-control-request-headers", "")
     if requested_headers:
-        logger.debug(f"Preflight requested headers: {requested_headers}")
+        logging_config.log_api_operation(f"Preflight requested headers: {requested_headers}", correlation_id=correlation_id)
     
     # Special handling for Clacky environment
     if is_clacky_environment() and origin:
@@ -341,7 +340,7 @@ async def options_handler(request: Request, full_path: str):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Custom handler for HTTP exceptions with proper formatting."""
-    logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
+    api_logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
     
     return JSONResponse(
         status_code=exc.status_code,
@@ -356,7 +355,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors."""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    logging_config.log_error(api_logger, f"Unhandled exception: {exc}")
     
     error_response = {
         "status": "error",
@@ -409,52 +408,55 @@ async def auth_test(current_user: User = Depends(get_current_user)):
 # Startup event to create database and seed data
 @app.on_event("startup")
 def on_startup():
-    logger.info("Starting up Library Management System API")
+    api_logger.info("=== Library Management System API Startup ===")
     
     # Get server configuration
     host = os.getenv("HOST", "0.0.0.0")
     port = os.getenv("PORT", "8000")
-    logger.info(f"Server configured to run on {host}:{port}")
+    api_logger.info(f"Server configured to run on {host}:{port}")
     
     # Initialize database
     create_db_and_tables()
-    initialize_database(minimal_data=True)
-    logger.info("Database initialized")
+    initialize_database()
+    api_logger.info("Database initialized successfully")
     
     # Log environment information
     env = os.getenv("ENVIRONMENT", "development")
-    logger.info(f"Running in {env} environment")
+    api_logger.info(f"Running in {env} environment")
     
     # Check for Clacky environment
     if is_clacky_environment():
-        logger.info("Detected Clacky deployment environment")
+        api_logger.info("Detected Clacky deployment environment")
         clacky_pattern = os.getenv("CLACKY_HOSTNAME_PATTERN", "clackypaas.com")
-        logger.info(f"Using Clacky hostname pattern: {clacky_pattern}")
+        api_logger.info(f"Using Clacky hostname pattern: {clacky_pattern}")
     
     # Log CORS configuration
-    logger.info(f"CORS allowed origins: {get_allowed_origins()}")
-    logger.info(f"CORS regex pattern: {get_clacky_origin_regex()}")
-    logger.info("Authentication system initialized")
+    api_logger.info(f"CORS allowed origins: {get_allowed_origins()}")
+    api_logger.info(f"CORS regex pattern: {get_clacky_origin_regex()}")
+    api_logger.info("Authentication system initialized")
     
     # Log all environment variables in debug mode (sanitized)
-    if logger.level == logging.DEBUG:
+    if api_logger.level <= logging.DEBUG:
         env_vars = {k: v if not ('SECRET' in k or 'PASSWORD' in k) else '******' 
                    for k, v in os.environ.items()}
-        logger.debug(f"Environment variables: {json.dumps(env_vars, indent=2)}")
+        api_logger.debug(f"Environment variables: {json.dumps(env_vars, indent=2)}")
+    
+    api_logger.info("=== Startup completed successfully ===")
 
 # Shutdown event
 @app.on_event("shutdown")
 def on_shutdown():
-    logger.info("Shutting down Library Management System API")
+    api_logger.info("=== Library Management System API Shutdown ===")
+    api_logger.info("Shutdown completed")
 
 if __name__ == "__main__":
     import uvicorn
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    log_level = os.getenv("LOG_LEVEL", "info").lower()
+    log_level = os.getenv("LOG", "info").lower()
     
-    # Log startup message with host and port
-    logger.info(f"Starting uvicorn server on {host}:{port}")
+    # Log startup message with host and port (this will go to console for essential info)
+    print(f"Starting Library Management System API on {host}:{port}")
     
     # Configure uvicorn with appropriate settings
     uvicorn.run(

@@ -41,7 +41,7 @@ def seed_admin_user(session: Session) -> bool:
         return False
 
 
-def seed_racks_and_shelves(session: Session, minimal: bool = False) -> bool:
+def seed_racks_and_shelves(session: Session) -> bool:
     """Seed racks and shelves data"""
     try:
         # Check if racks already exist
@@ -57,9 +57,6 @@ def seed_racks_and_shelves(session: Session, minimal: bool = False) -> bool:
             {"name": "Physics", "description": "Classical and Modern Physics"},
             {"name": "Literature", "description": "Fiction and Non-Fiction"}
         ]
-        
-        if minimal:
-            racks_data = racks_data[:2]  # Only first 2 racks for minimal data
         
         # Create racks
         created_racks = []
@@ -89,9 +86,6 @@ def seed_racks_and_shelves(session: Session, minimal: bool = False) -> bool:
             {"name": "Poetry", "rack_idx": 3, "capacity": 25}
         ]
         
-        if minimal:
-            shelves_data = shelves_data[:5]  # Only first 5 shelves for minimal data
-        
         # Create shelves
         for shelf_data in shelves_data:
             if shelf_data["rack_idx"] < len(created_racks):
@@ -112,7 +106,7 @@ def seed_racks_and_shelves(session: Session, minimal: bool = False) -> bool:
         return False
 
 
-def seed_books(session: Session, minimal: bool = False) -> bool:
+def seed_books(session: Session) -> bool:
     """Seed sample books data"""
     try:
         # Check if books already exist
@@ -177,25 +171,11 @@ def seed_books(session: Session, minimal: bool = False) -> bool:
                 "shelf_name": "Classical Mechanics"
             },
             {
-                "isbn": "978-0-262-03384-8",
-                "title": "Design Patterns",
-                "author": "Gang of Four",
-                "genre": "Computer Science",
-                "shelf_name": "Programming Fundamentals"
-            },
-            {
-                "isbn": "978-0-201-63361-0",
-                "title": "The Pragmatic Programmer",
-                "author": "Andrew Hunt",
-                "genre": "Computer Science",
-                "shelf_name": "Programming Fundamentals"
-            },
-            {
-                "isbn": "978-0-134-68570-4",
-                "title": "Operating System Concepts",
-                "author": "Abraham Silberschatz",
-                "genre": "Computer Science",
-                "shelf_name": "Data Structures"
+                "isbn": "978-0-486-61272-0",
+                "title": "Discrete Mathematics and Its Applications",
+                "author": "Kenneth H. Rosen",
+                "genre": "Mathematics",
+                "shelf_name": "Linear Algebra"
             },
             {
                 "isbn": "978-0-201-88954-3",
@@ -205,44 +185,20 @@ def seed_books(session: Session, minimal: bool = False) -> bool:
                 "shelf_name": "Programming Fundamentals"
             },
             {
-                "isbn": "978-0-321-48681-3",
-                "title": "Database System Concepts",
+                "isbn": "978-0-262-03384-8",
+                "title": "Design Patterns",
+                "author": "Gang of Four",
+                "genre": "Computer Science",
+                "shelf_name": "Programming Fundamentals"
+            },
+            {
+                "isbn": "978-0-134-68570-4",
+                "title": "Operating System Concepts",
                 "author": "Abraham Silberschatz",
                 "genre": "Computer Science",
                 "shelf_name": "Data Structures"
-            },
-            {
-                "isbn": "978-0-13-394460-1",
-                "title": "Computer Networks",
-                "author": "Andrew S. Tanenbaum",
-                "genre": "Computer Science",
-                "shelf_name": "Data Structures"
-            },
-            {
-                "isbn": "978-0-13-142267-6",
-                "title": "Advanced Engineering Mathematics",
-                "author": "Erwin Kreyszig",
-                "genre": "Mathematics",
-                "shelf_name": "Calculus"
-            },
-            {
-                "isbn": "978-0-486-61272-0",
-                "title": "Discrete Mathematics and Its Applications",
-                "author": "Kenneth H. Rosen",
-                "genre": "Mathematics",
-                "shelf_name": "Linear Algebra"
-            },
-            {
-                "isbn": "978-0-673-38259-2",
-                "title": "Numerical Analysis",
-                "author": "Richard L. Burden",
-                "genre": "Mathematics",
-                "shelf_name": "Calculus"
             }
         ]
-        
-        if minimal:
-            books_data = books_data[:5]  # Only first 5 books for minimal data
         
         # Create books
         created_books = 0
@@ -275,7 +231,7 @@ def seed_books(session: Session, minimal: bool = False) -> bool:
         return False
 
 
-def seed_users(session: Session, minimal: bool = False) -> bool:
+def seed_users(session: Session) -> bool:
     """Seed sample users data"""
     try:
         # Check if users already exist (excluding admin)
@@ -284,52 +240,25 @@ def seed_users(session: Session, minimal: bool = False) -> bool:
             print("Users already exist, skipping user seeding")
             return False
         
-        # Define user data
+        # Define exact 2 users data
         users_data = [
             {
-                "name": "John Doe",
+                "name": "User One",
                 "usn": "1MS21CS001",
-                "email": "john.doe@example.com",
+                "email": "one@one.com",
                 "mobile": "9876543210",
                 "address": "123 Main Street, Bangalore",
-                "password": "password123"
+                "password": "one@1"
             },
             {
-                "name": "Jane Smith",
+                "name": "User Two",
                 "usn": "1MS21CS002",
-                "email": "jane.smith@example.com",
+                "email": "two@two.com",
                 "mobile": "9876543211",
                 "address": "456 Oak Avenue, Bangalore",
-                "password": "password123"
-            },
-            {
-                "name": "Bob Johnson",
-                "usn": "1MS21CS003",
-                "email": "bob.johnson@example.com",
-                "mobile": "9876543212",
-                "address": "789 Pine Road, Bangalore",
-                "password": "password123"
-            },
-            {
-                "name": "Alice Brown",
-                "usn": "1MS21CS004",
-                "email": "alice.brown@example.com",
-                "mobile": "9876543213",
-                "address": "321 Elm Street, Bangalore",
-                "password": "password123"
-            },
-            {
-                "name": "Charlie Wilson",
-                "usn": "1MS21CS005",
-                "email": "charlie.wilson@example.com",
-                "mobile": "9876543214",
-                "address": "654 Cedar Lane, Bangalore",
-                "password": "password123"
+                "password": "two@2"
             }
         ]
-        
-        if minimal:
-            users_data = users_data[:3]  # Only first 3 users for minimal data
         
         # Create users
         created_users = 0
@@ -356,8 +285,8 @@ def seed_users(session: Session, minimal: bool = False) -> bool:
         return False
 
 
-def seed_sample_transactions(session: Session, minimal: bool = False) -> bool:
-    """Seed some sample transactions for demonstration"""
+def seed_sample_transactions(session: Session) -> bool:
+    """Seed sample transactions with specific scenarios"""
     try:
         # Check if transactions already exist
         existing_transactions = session.query(Transaction).first()
@@ -365,16 +294,17 @@ def seed_sample_transactions(session: Session, minimal: bool = False) -> bool:
             print("Transactions already exist, skipping transaction seeding")
             return False
         
-        # Get some users and books
-        users = session.query(User).filter(User.role == "user").limit(3).all()
-        books = session.query(Book).limit(5).all()
+        # Get users and books
+        users = session.query(User).filter(User.role == "user").all()
+        books = session.query(Book).all()
         
-        if not users or not books:
-            print("No users or books found, skipping transaction seeding")
+        if len(users) < 2 or len(books) < 10:
+            print("Not enough users or books found, skipping transaction seeding")
             return False
         
-        # Create sample transactions
-        transactions_data = [
+        # Create specific transaction scenarios
+        # 3 books currently issued (within due date)
+        current_transactions = [
             {
                 "book_idx": 0,
                 "user_idx": 0,
@@ -392,58 +322,78 @@ def seed_sample_transactions(session: Session, minimal: bool = False) -> bool:
             {
                 "book_idx": 2,
                 "user_idx": 0,
-                "days_ago": 45,
+                "days_ago": 15,
                 "due_days": 30,
-                "status": "overdue",
-                "returned": False
+                "status": "current"
             }
         ]
         
-        if minimal:
-            transactions_data = transactions_data[:2]
+        # 3 books overdue (past due date with calculated fines)
+        overdue_transactions = [
+            {
+                "book_idx": 3,
+                "user_idx": 1,
+                "days_ago": 45,
+                "due_days": 30,
+                "status": "overdue"
+            },
+            {
+                "book_idx": 4,
+                "user_idx": 0,
+                "days_ago": 50,
+                "due_days": 30,
+                "status": "overdue"
+            },
+            {
+                "book_idx": 5,
+                "user_idx": 1,
+                "days_ago": 40,
+                "due_days": 30,
+                "status": "overdue"
+            }
+        ]
+        
+        # Combine all transactions
+        all_transactions = current_transactions + overdue_transactions
         
         created_transactions = 0
-        for trans_data in transactions_data:
-            if (trans_data["book_idx"] < len(books) and 
-                trans_data["user_idx"] < len(users)):
-                
-                book = books[trans_data["book_idx"]]
-                user = users[trans_data["user_idx"]]
-                
-                issued_date = datetime.utcnow() - timedelta(days=trans_data["days_ago"])
-                due_date = issued_date + timedelta(days=trans_data["due_days"])
-                
-                transaction = Transaction(
-                    book_id=book.id,
-                    user_id=user.id,
-                    book_title=book.title,
-                    book_author=book.author,
-                    book_isbn=book.isbn,
-                    issued_date=issued_date,
-                    due_date=due_date,
-                    status=trans_data["status"]
-                )
-                
-                # Update book status
-                if trans_data.get("returned", True) == False:
-                    book.is_available = False
-                    book.issued_to = user.id
-                    book.issued_date = issued_date
-                    book.return_date = due_date
-                    session.add(book)
-                
-                # Handle overdue
-                if trans_data["status"] == "overdue":
-                    days_overdue = (datetime.utcnow() - due_date).days
-                    fine_amount = days_overdue * 5.0
-                    transaction.days_overdue = days_overdue
-                    transaction.fine_amount = fine_amount
-                
-                session.add(transaction)
-                created_transactions += 1
+        for trans_data in all_transactions:
+            book = books[trans_data["book_idx"]]
+            user = users[trans_data["user_idx"]]
+            
+            issued_date = datetime.utcnow() - timedelta(days=trans_data["days_ago"])
+            due_date = issued_date + timedelta(days=trans_data["due_days"])
+            
+            transaction = Transaction(
+                book_id=book.id,
+                user_id=user.id,
+                book_title=book.title,
+                book_author=book.author,
+                book_isbn=book.isbn,
+                issued_date=issued_date,
+                due_date=due_date,
+                status=trans_data["status"]
+            )
+            
+            # Update book status (mark as not available)
+            book.is_available = False
+            book.issued_to = user.id
+            book.issued_date = issued_date
+            book.return_date = due_date
+            session.add(book)
+            
+            # Handle overdue transactions
+            if trans_data["status"] == "overdue":
+                days_overdue = (datetime.utcnow() - due_date).days
+                fine_amount = days_overdue * 5.0
+                transaction.days_overdue = days_overdue
+                transaction.fine_amount = fine_amount
+            
+            session.add(transaction)
+            created_transactions += 1
         
         session.commit()
-        print(f"Created {created_transactions} sample transactions")
+        print(f"Created {created_transactions} sample transactions (3 current, 3 overdue, 4 books available)")
         return True
         
     except Exception as e:
@@ -452,7 +402,24 @@ def seed_sample_transactions(session: Session, minimal: bool = False) -> bool:
         return False
 
 
-def initialize_database(minimal_data: bool = False):
+def clear_existing_data(session: Session):
+    """Clear existing database data to ensure clean state"""
+    try:
+        # Delete in reverse order of dependencies
+        session.query(Fine).delete()
+        session.query(Transaction).delete()
+        session.query(Book).delete()
+        session.query(Shelf).delete()
+        session.query(Rack).delete()
+        session.query(User).filter(User.role == "user").delete()
+        session.commit()
+        print("Cleared existing database data")
+    except Exception as e:
+        print(f"Error clearing existing data: {e}")
+        session.rollback()
+
+
+def initialize_database():
     """Initialize database and seed with data"""
     print("Initializing database...")
     
@@ -462,46 +429,46 @@ def initialize_database(minimal_data: bool = False):
     
     # Seed data
     with get_session_context() as session:
-        print(f"Seeding database with {'minimal' if minimal_data else 'full'} data...")
+        print("Clearing existing data and seeding database...")
+        
+        # Clear existing data
+        clear_existing_data(session)
         
         # Seed admin user
         seed_admin_user(session)
         
         # Seed racks and shelves
-        seed_racks_and_shelves(session, minimal=minimal_data)
+        seed_racks_and_shelves(session)
         
         # Seed books
-        seed_books(session, minimal=minimal_data)
+        seed_books(session)
         
         # Seed users
-        seed_users(session, minimal=minimal_data)
+        seed_users(session)
         
-        # Seed sample transactions (only for full data)
-        if not minimal_data:
-            seed_sample_transactions(session, minimal=minimal_data)
+        # Seed sample transactions
+        seed_sample_transactions(session)
     
     print("Database initialization completed!")
 
 
 if __name__ == "__main__":
-    import sys
-    
-    # Check for minimal flag
-    minimal = "--minimal" in sys.argv
-    
     try:
-        initialize_database(minimal_data=minimal)
+        initialize_database()
         print("\n" + "="*50)
         print("DATABASE SEEDED SUCCESSFULLY!")
         print("="*50)
         print("Admin Login:")
         print("  Email: admin@lms.com")
         print("  Password: admin@1234")
-        print("\nSample User Login:")
-        print("  Email: john.doe@example.com")
-        print("  Password: password123")
+        print("\nUser Login Options:")
+        print("  Email: one@one.com")
+        print("  Password: one@1")
+        print("  Email: two@two.com")
+        print("  Password: two@2")
         print("="*50)
         
     except Exception as e:
         print(f"Error initializing database: {e}")
+        import sys
         sys.exit(1)

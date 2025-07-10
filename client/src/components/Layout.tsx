@@ -63,8 +63,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     { id: 'books', label: 'Books', icon: BookOpen },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'inventory', label: 'Inventory', icon: Package },
-    { id: 'racks', label: 'Racks', icon: Layers },
-    { id: 'shelves', label: 'Shelves', icon: Grid },
     { id: 'overdue', label: 'Overdue & Fines', icon: AlertTriangle },
     { id: 'reports', label: 'Reports', icon: BarChart3 }
   ];
@@ -238,18 +236,6 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
             </div>
           )}
-          
-          {/* Page title */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900 capitalize">
-              {currentPage === 'dashboard' ? 
-                (user.role === 'admin' ? 'Admin Dashboard' : 'Library Dashboard') : 
-                currentPage}
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
           
           {/* Page content */}
           <div className="bg-white shadow-sm rounded-lg p-4 md:p-6 border border-gray-100">
