@@ -14,7 +14,8 @@ import {
   RotateCcw,
   User,
   RefreshCw,
-  Loader
+  Loader,
+  DollarSign
 } from 'lucide-react';
 import {
   getBooks,
@@ -26,7 +27,8 @@ import {
   getShelves,
   getUsers,
   issueBook,
-  returnBook
+  returnBook,
+  getFines
 } from '../../utils/api';
 import { Book, Rack, Shelf, BookCreatePayload, BookUpdatePayload, User as AppUser, IssueBookPayload, ReturnBookPayload } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -78,6 +80,8 @@ const BookManagement: React.FC = () => {
 
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Book[]>([]);
+  const [fineStatusCache, setFineStatusCache] = useState<{[bookId: number]: boolean}>({});
+  const [isCheckingFines, setIsCheckingFines] = useState(false);
 
   const getRackName = (rackId: number) => {
     return racks.find(rack => rack.id === rackId)?.name || 'Unknown';
@@ -90,6 +94,58 @@ const BookManagement: React.FC = () => {
   const getAvailableShelves = (rackId: number) => {
     return shelves.filter(shelf => shelf.rack_id === rackId);
   };
+
+  const checkBookHasPendingFines = useCallback(async (bookId: number): Promise<boolean> => {
+    // Check cache first
+    if (fineStatusCache[bookId] !== undefined) {
+      return fineStatusCache[bookId];
+    }
+
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) return false;
+
+      const response = await getFines(token, 'pending');
+      const bookInState = books.find(b => b.id === bookId);
+      const hasPendingFines = response.fines.some(fine => 
+        bookInState && fine.book_isbn === bookInState.isbn
+      );
+
+      // Update cache
+      setFineStatusCache(prev => ({ ...prev, [bookId]: hasPendingFines }));
+      return hasPendingFines;
+    } catch (error) {
+      console.error('Error checking fine status:', error);
+      return false;
+    }
+  }, [fineStatusCache, books]);
+
+  const checkMultipleBooksFineStatus = useCallback(async (bookIds: number[]) => {
+    if (bookIds.length === 0) return;
+    
+    setIsCheckingFines(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) return;
+
+      const response = await getFines(token, 'pending');
+      const newFineStatusCache: {[bookId: number]: boolean} = {};
+      
+      bookIds.forEach(bookId => {
+        const book = books.find(b => b.id === bookId);
+        if (book) {
+          const hasPendingFines = response.fines.some(fine => fine.book_isbn === book.isbn);
+          newFineStatusCache[book.id] = hasPendingFines;
+        }
+      });
+
+      setFineStatusCache(prev => ({ ...prev, ...newFineStatusCache }));
+    } catch (error) {
+      console.error('Error checking multiple books fine status:', error);
+    } finally {
+      setIsCheckingFines(false);
+    }
+  }, [books]);
 
   const getStatusIcon = (isAvailable: boolean) => {
     return isAvailable ?
@@ -111,6 +167,7 @@ const BookManagement: React.FC = () => {
     setCurrentPage(0); // Reset to first page on refresh
     setSearchTerm(''); // Clear search term on refresh
     setFilterStatus('all'); // Reset filter status on refresh
+    setFineStatusCache({}); // Clear fine status cache on refresh
   };
 
   const fetchData = useCallback(async () => {
@@ -187,6 +244,15 @@ const BookManagement: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (books.length > 0) {
+      const issuedBookIds = books.filter(book => !book.is_available).map(book => book.id);
+      if (issuedBookIds.length > 0) {
+        checkMultipleBooksFineStatus(issuedBookIds);
+      }
+    }
+  }, [books, checkMultipleBooksFineStatus]);
 
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -447,14 +513,25 @@ const BookManagement: React.FC = () => {
     }
   };
 
-  const handleIssueBook = async () => {
-    if (!user) {
+  const handleReturnBook = (book: Book) => {
+    setSelectedBook(book);
+    setReturnData({
+      isbn: book.isbn,
+      userUsn: '',
+      condition: 'good',
+      notes: ''
+    });
+    setShowReturnModal(true);
+  };
+
+  const confirmReturnBook = async () => {
+    if (!selectedBook || !user) {
       showNotification('error', 'Authentication required');
       return;
     }
 
-    if (!issueData.isbn.trim() || !issueData.userUsn.trim() || !issueData.dueDate) {
-      showNotification('error', 'All fields (ISBN, USN, Due Date) are required');
+    if (!returnData.userUsn.trim()) {
+      showNotification('error', 'Student USN is required');
       return;
     }
 
@@ -465,34 +542,97 @@ const BookManagement: React.FC = () => {
         throw new Error('Authentication token not found');
       }
 
-      // Find book by ISBN
-      const book = books.find(b => b.isbn === issueData.isbn.trim());
-      if (!book) {
-        showNotification('error', 'Book not found with this ISBN');
-        setIsOperationLoading(false);
-        return;
-      }
-      if (!book.is_available) {
-        showNotification('error', 'This book is currently not available for issue.');
-        setIsOperationLoading(false);
-        return;
-      }
-
-      // Find user by USN
-      const foundUser = users.find(u => u.usn === issueData.userUsn.trim());
-      if (!foundUser) {
-        showNotification('error', 'User not found with this USN');
-        setIsOperationLoading(false);
-        return;
-      }
-
-      const issuePayload: IssueBookPayload = {
-        book_id: book.id,
-        user_id: foundUser.id,
-        due_date: new Date(issueData.dueDate).toISOString()
+      const payload: ReturnBookPayload = {
+        book_id: selectedBook.id,
+        user_id: users.find(u => u.usn === returnData.userUsn)?.id,
+        isbn: returnData.isbn,
+        user_usn: returnData.userUsn,
+        condition: returnData.condition,
+        notes: returnData.notes
       };
 
-      await issueBook(token, issuePayload);
+      const response = await returnBook(token, payload);
+      
+      // Handle enhanced success response with detailed information
+      let successMessage = response.message;
+      if (response.fine_amount && response.days_overdue) {
+        successMessage += ` A fine of ₹${response.fine_amount} has been applied for ${response.days_overdue} overdue days.`;
+      }
+      
+      showNotification('success', successMessage);
+      setShowReturnModal(false);
+      setSelectedBook(null);
+      setReturnData({
+        isbn: '',
+        userUsn: '',
+        condition: 'good',
+        notes: ''
+      });
+      // Clear fine status cache for this book
+      setFineStatusCache(prev => {
+        const updated = { ...prev };
+        delete updated[selectedBook.id];
+        return updated;
+      });
+      handleRefresh();
+    } catch (err) {
+      console.error('Failed to return book:', err);
+      if (err instanceof Error) {
+        // Handle specific error scenarios from enhanced backend
+        if (err.message.includes('not issued to user') || err.message.includes('not issued to this user')) {
+          showNotification('error', 'This book is not issued to the specified user. Please verify the correct user USN.');
+        } else if (err.message.includes('unpaid fine') || err.message.includes('pending fine')) {
+          showNotification('error', 'Cannot return this book. Please pay the pending fine first before returning the book.');
+        } else if (err.message.includes('not currently issued')) {
+          showNotification('error', 'This book is not currently issued and cannot be returned.');
+        } else if (err.message.includes('book not found')) {
+          showNotification('error', 'Book not found. Please refresh and try again.');
+        } else if (err.message.includes('user not found')) {
+          showNotification('error', 'User not found. Please verify the USN and try again.');
+        } else if (err.message.includes('No active transaction')) {
+          showNotification('error', 'No active transaction found for this book and user combination.');
+        } else if (err.message.includes('401')) {
+          showNotification('error', 'Authentication expired. Please log in again.');
+        } else if (err.message.includes('403')) {
+          showNotification('error', 'Access denied. You do not have permission to return books.');
+        } else if (err.message.includes('Network')) {
+          showNotification('error', 'Network error. Please check your connection and try again.');
+        } else {
+          showNotification('error', err.message);
+        }
+      } else {
+        showNotification('error', 'Failed to return book. Please try again.');
+      }
+    } finally {
+      setIsOperationLoading(false);
+    }
+  };
+
+  const handleIssueBook = async () => {
+    if (!user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    if (!issueData.isbn.trim() || !issueData.userUsn.trim() || !issueData.dueDate) {
+      showNotification('error', 'All fields are required for book issue');
+      return;
+    }
+
+    setIsOperationLoading(true);
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const payload: IssueBookPayload = {
+        isbn: issueData.isbn.trim(),
+        user_usn: issueData.userUsn.trim(),
+        due_date: issueData.dueDate
+      };
+
+      await issueBook(token, payload);
       showNotification('success', 'Book issued successfully');
       setIssueData({
         isbn: '',
@@ -504,12 +644,12 @@ const BookManagement: React.FC = () => {
     } catch (err) {
       console.error('Failed to issue book:', err);
       if (err instanceof Error) {
-        if (err.message.includes('already issued to this user')) {
-          showNotification('error', 'This book is already issued to this user.');
-        } else if (err.message.includes('not available')) {
+        if (err.message.includes('not available')) {
           showNotification('error', 'This book is not available for issue.');
-        } else if (err.message.includes('not found')) {
-          showNotification('error', 'Book or User not found.');
+        } else if (err.message.includes('user not found')) {
+          showNotification('error', 'User not found. Please verify the USN.');
+        } else if (err.message.includes('book not found')) {
+          showNotification('error', 'Book not found. Please verify the ISBN.');
         } else if (err.message.includes('401')) {
           showNotification('error', 'Authentication expired. Please log in again.');
         } else if (err.message.includes('403')) {
@@ -527,84 +667,6 @@ const BookManagement: React.FC = () => {
     }
   };
 
-  const handleReturnBook = (book: Book) => {
-    setSelectedBook(book);
-    setReturnData({
-      isbn: book.isbn,
-      userUsn: '', // USN needs to be entered by admin, not necessarily pre-filled
-      condition: 'good',
-      notes: ''
-    });
-    setShowReturnModal(true);
-  };
-
-  const confirmReturnBook = async () => {
-    if (!user) {
-      showNotification('error', 'Authentication required');
-      return;
-    }
-
-    if (!selectedBook || !returnData.isbn.trim() || !returnData.userUsn.trim()) {
-      showNotification('error', 'Missing required information (Book, ISBN, USN)');
-      return;
-    }
-
-    setIsOperationLoading(true);
-    try {
-      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-
-      // Find user by USN
-      const foundUser = users.find(u => u.usn === returnData.userUsn.trim());
-      if (!foundUser) {
-        showNotification('error', 'User not found with this USN');
-        setIsOperationLoading(false);
-        return;
-      }
-
-      const returnPayload: ReturnBookPayload = {
-        book_id: selectedBook.id,
-        user_id: foundUser.id,
-        condition: returnData.condition,
-        notes: returnData.notes.trim()
-      };
-
-      await returnBook(token, returnPayload);
-      showNotification('success', 'Book returned successfully');
-      setReturnData({
-        isbn: '',
-        userUsn: '',
-        condition: 'good',
-        notes: ''
-      });
-      setShowReturnModal(false);
-      setSelectedBook(null);
-      handleRefresh();
-    } catch (err) {
-      console.error('Failed to return book:', err);
-      if (err instanceof Error) {
-        if (err.message.includes('not currently issued to this user')) {
-          showNotification('error', 'This book is not currently issued to this user.');
-        } else if (err.message.includes('not found')) {
-          showNotification('error', 'Book or User not found.');
-        } else if (err.message.includes('401')) {
-          showNotification('error', 'Authentication expired. Please log in again.');
-        } else if (err.message.includes('403')) {
-          showNotification('error', 'Access denied. You do not have permission to return books.');
-        } else if (err.message.includes('Network')) {
-          showNotification('error', 'Network error. Please check your connection and try again.');
-        } else {
-          showNotification('error', err.message);
-        }
-      } else {
-        showNotification('error', 'Failed to return book. Please try again.');
-      }
-    } finally {
-      setIsOperationLoading(false);
-    }
-  };
 
   let searchTimeout: ReturnType<typeof setTimeout>;
 
@@ -708,18 +770,11 @@ const BookManagement: React.FC = () => {
               <span>Add Book</span>
             </button>
             <button
-              onClick={() => { setShowIssueModal(true); setIssueData({ isbn: '', userUsn: '', dueDate: '' });}}
+              onClick={() => { setShowIssueModal(true); setIssueData({ isbn: '', userUsn: '', dueDate: '' }); }}
               className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm md:text-base"
             >
-              <BookOpen className="w-4 h-4 md:w-5 md:h-5" />
+              <User className="w-4 h-4 md:w-5 md:h-5" />
               <span>Issue Book</span>
-            </button>
-            <button
-              onClick={() => { setShowReturnModal(true); setSelectedBook(null); setReturnData({ isbn: '', userUsn: '', condition: 'good', notes: '' });}}
-              className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg hover:bg-purple-700 transition-colors duration-200 text-sm md:text-base"
-            >
-              <RotateCcw className="w-4 h-4 md:w-5 md:h-5" />
-              <span>Return Book</span>
             </button>
           </div>
         </div>
@@ -829,6 +884,17 @@ const BookManagement: React.FC = () => {
                         <span className="text-sm font-medium">
                           {book.is_available ? 'Available' : 'Issued'}
                         </span>
+                        {!book.is_available && fineStatusCache[book.id] && (
+                          <div className="relative group">
+                            <DollarSign className="w-4 h-4 text-red-500" title="Has pending fines" />
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-red-600 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                              Pending fines
+                            </div>
+                          </div>
+                        )}
+                        {!book.is_available && isCheckingFines && (
+                          <Loader className="w-3 h-3 animate-spin text-gray-400" />
+                        )}
                       </div>
                       {!book.is_available && book.return_date && (
                         <div className="text-xs text-gray-500 mt-1">
@@ -849,16 +915,6 @@ const BookManagement: React.FC = () => {
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        {!Boolean(book.is_available) && (
-                          <button
-                            onClick={() => handleReturnBook(book)}
-                            disabled={isOperationLoading}
-                            className="text-purple-600 hover:text-purple-900 p-1 hover:bg-purple-50 rounded disabled:opacity-50"
-                            title="Return Book"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                        )}
                         <button
                           onClick={() => handleDeleteBook(book)}
                           disabled={isOperationLoading}
@@ -867,6 +923,43 @@ const BookManagement: React.FC = () => {
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
+                        {!book.is_available && !fineStatusCache[book.id] && (
+                          <button
+                            onClick={() => handleReturnBook(book)}
+                            disabled={isOperationLoading || isCheckingFines}
+                            className="text-purple-600 hover:text-purple-900 p-1 hover:bg-purple-50 rounded disabled:opacity-50"
+                            title="Return Book"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        {!book.is_available && fineStatusCache[book.id] && (
+                          <div className="relative group">
+                            <button
+                              disabled
+                              className="text-gray-400 p-1 cursor-not-allowed"
+                              title="Cannot return - pending fines"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-red-600 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                              Pay fine first
+                            </div>
+                          </div>
+                        )}
+                        {book.is_available && (
+                          <button
+                            onClick={() => {
+                              setIssueData({ isbn: book.isbn, userUsn: '', dueDate: '' });
+                              setShowIssueModal(true);
+                            }}
+                            disabled={isOperationLoading}
+                            className="text-green-600 hover:text-green-900 p-1 hover:bg-green-50 rounded disabled:opacity-50"
+                            title="Issue Book"
+                          >
+                            <User className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1360,7 +1453,7 @@ const BookManagement: React.FC = () => {
         }`}>
           <div className="flex items-center space-x-2">
             {notification.type === 'success' ? (
-              <CheckCircle className="w-5 h-5" />
+              <RotateCcw className="w-5 h-5" />
             ) : (
               <AlertTriangle className="w-5 h-5" />
             )}

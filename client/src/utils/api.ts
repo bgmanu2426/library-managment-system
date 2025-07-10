@@ -68,6 +68,7 @@ export const API_ENDPOINTS = {
   CALCULATE_FINES: '/api/overdue/calculate-fines',
   PAY_FINE: '/api/overdue/fines/{fine_id}/pay',
   WAIVE_FINE: '/api/overdue/fines/{fine_id}/waive',
+  OVERDUE_SUMMARY: '/api/overdue/summary',
   
   // Reports endpoints
   USER_ACTIVITY_REPORT: '/api/reports/user-activity',
@@ -725,36 +726,103 @@ export const issueBook = async (token: string, issueData: IssueBookPayload): Pro
   );
 };
 
-export const returnBook = async (token: string, returnData: ReturnBookPayload): Promise<{ message: string; transaction: Transaction; fine_amount?: number; days_overdue?: number }> => {
+export const returnBook = async (token: string, returnData: ReturnBookPayload): Promise<{ 
+  message: string; 
+  book_title?: string;
+  user_name?: string;
+  return_date?: string;
+  fine_amount?: number; 
+  days_overdue?: number;
+  warning?: string;
+}> => {
   try {
+    validateAuthToken(token);
+    
+    // Enhanced validation of return data
+    if (!returnData || typeof returnData !== 'object') {
+      throw new Error('Invalid return data provided');
+    }
+    
+    if (!returnData.book_id || typeof returnData.book_id !== 'number' || returnData.book_id <= 0) {
+      throw new Error('Valid book ID is required');
+    }
+    
+    if (!returnData.user_id || typeof returnData.user_id !== 'number' || returnData.user_id <= 0) {
+      throw new Error('Valid user ID is required');
+    }
+    
     const response = await apiRequest<{ 
-      message: string; 
-      transaction: Transaction; 
+      message: string;
+      book_title?: string;
+      user_name?: string; 
+      return_date?: string;
       fine_amount?: number; 
-      days_overdue?: number 
+      days_overdue?: number;
+      warning?: string;
     }>(
       getApiUrl(API_ENDPOINTS.RETURN_BOOK),
       {
         ...createAuthenticatedRequest(token),
         method: 'POST',
         body: JSON.stringify(returnData),
-      }
+      },
+      2, // Enhanced retry logic for return operations
+      35000 // Extended timeout for book return operations
     );
     
-    // Ensure response has required fields
+    // Validate response structure
     if (!response || typeof response !== 'object') {
-      throw new Error('Invalid response format');
+      throw new Error('Invalid response format from server');
     }
     
+    // Return enhanced response with all available information
     return {
       message: response.message || 'Book returned successfully',
-      transaction: response.transaction,
+      book_title: response.book_title,
+      user_name: response.user_name,
+      return_date: response.return_date,
       fine_amount: typeof response.fine_amount === 'number' ? response.fine_amount : undefined,
-      days_overdue: typeof response.days_overdue === 'number' ? response.days_overdue : undefined
+      days_overdue: typeof response.days_overdue === 'number' ? response.days_overdue : undefined,
+      warning: response.warning
     };
+    
   } catch (error) {
     console.error('Error returning book:', error);
-    throw error;
+    
+    // Enhanced error handling with specific error scenarios
+    if (error instanceof Error) {
+      // Handle specific validation errors from backend
+      if (error.message.includes('not issued to user') || error.message.includes('not issued to this user')) {
+        throw new Error('This book is not issued to the specified user. Please verify the correct user.');
+      } else if (error.message.includes('unpaid fine') || error.message.includes('pending fine')) {
+        throw new Error('Cannot return this book. Please pay the pending fine first before returning the book.');
+      } else if (error.message.includes('not currently issued')) {
+        throw new Error('This book is not currently issued and cannot be returned.');
+      } else if (error.message.includes('book not found')) {
+        throw new Error('Book not found. Please refresh and try again.');
+      } else if (error.message.includes('user not found')) {
+        throw new Error('User not found. Please verify the user information and try again.');
+      } else if (error.message.includes('No active transaction')) {
+        throw new Error('No active transaction found for this book and user combination.');
+      } else if (error.message.includes('timeout') || error.name === 'AbortError') {
+        throw new Error('Book return request timed out. Please check your connection and try again.');
+      } else if (error.message.includes('401')) {
+        throw new Error('Authentication expired. Please log in again.');
+      } else if (error.message.includes('403')) {
+        throw new Error('Access denied. You do not have permission to return books.');
+      } else if (error.message.includes('422')) {
+        throw new Error('Invalid book return data. Please check your inputs and try again.');
+      } else if (error.message.includes('500')) {
+        throw new Error('Server error occurred while processing book return. Please try again later.');
+      } else if (error.message.includes('Network') || error.message.includes('fetch')) {
+        throw new Error('Network error. Please check your connection and try again.');
+      } else if (error.message.includes('Invalid') || error.message.includes('required')) {
+        throw error; // Pass through validation errors as-is
+      }
+    }
+    
+    // Generic fallback error
+    throw new Error('Failed to return book. Please try again or contact support.');
   }
 };
 
@@ -929,6 +997,20 @@ const clearExpiredCache = () => {
   for (const [key, value] of overdueRequestCache.entries()) {
     if (now - value.timestamp > CACHE_DURATION) {
       overdueRequestCache.delete(key);
+    }
+  }
+};
+
+// Fine status cache for book fine checking
+const bookFineStatusCache = new Map<string, { hasPendingFines: boolean; timestamp: number; bookId: number }>();
+const FINE_STATUS_CACHE_DURATION = 10000; // 10 seconds
+
+// Helper function to clear expired fine status cache entries
+const clearExpiredFineStatusCache = () => {
+  const now = Date.now();
+  for (const [key, value] of bookFineStatusCache.entries()) {
+    if (now - value.timestamp > FINE_STATUS_CACHE_DURATION) {
+      bookFineStatusCache.delete(key);
     }
   }
 };
@@ -1289,6 +1371,156 @@ export const waiveFine = async (token: string, fineId: number, waiveData: WaiveF
     }
     
     throw new Error('An unexpected error occurred while waiving the fine. Please try again or contact support.');
+  }
+};
+
+export const checkBookFineStatus = async (token: string, bookId: number, bookIsbn?: string): Promise<{ hasPendingFines: boolean; fineCount: number }> => {
+  try {
+    validateAuthToken(token);
+    
+    if (!bookId || typeof bookId !== 'number' || bookId <= 0 || !Number.isInteger(bookId)) {
+      throw new Error('Invalid book ID provided. Book ID must be a positive integer.');
+    }
+    
+    // Clear expired cache entries
+    clearExpiredFineStatusCache();
+    
+    // Check cache first
+    const cacheKey = `book_fine_status_${bookId}_${token.slice(-10)}`;
+    const cachedResult = bookFineStatusCache.get(cacheKey);
+    
+    if (cachedResult && Date.now() - cachedResult.timestamp < FINE_STATUS_CACHE_DURATION) {
+      return { 
+        hasPendingFines: cachedResult.hasPendingFines, 
+        fineCount: cachedResult.hasPendingFines ? 1 : 0 
+      };
+    }
+    
+    // Fetch pending fines
+    const finesResponse = await getFines(token, 'pending');
+    
+    let hasPendingFines = false;
+    let fineCount = 0;
+    
+    if (bookIsbn) {
+      // Check by ISBN if provided
+      const bookFines = finesResponse.fines.filter(fine => fine.book_isbn === bookIsbn);
+      hasPendingFines = bookFines.length > 0;
+      fineCount = bookFines.length;
+    }
+    
+    // Cache the result
+    bookFineStatusCache.set(cacheKey, {
+      hasPendingFines,
+      timestamp: Date.now(),
+      bookId
+    });
+    
+    return { hasPendingFines, fineCount };
+    
+  } catch (error) {
+    console.error('Error checking book fine status:', error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes('timeout')) {
+        throw new Error('Request timed out while checking fine status. Please try again.');
+      } else if (error.message.includes('Authentication')) {
+        throw new Error('Authentication failed. Please log in again to check fine status.');
+      } else if (error.message.includes('403')) {
+        throw new Error('Access denied. You do not have permission to check fine status.');
+      } else if (error.message.includes('Network')) {
+        throw new Error('Network error while checking fine status. Please check your connection.');
+      }
+    }
+    
+    // Return safe default to prevent UI crashes
+    return { hasPendingFines: false, fineCount: 0 };
+  }
+};
+
+export const checkMultipleBooksFineStatus = async (token: string, books: Array<{ id: number; isbn: string }>): Promise<Map<number, { hasPendingFines: boolean; fineCount: number }>> => {
+  try {
+    validateAuthToken(token);
+    
+    if (!Array.isArray(books) || books.length === 0) {
+      return new Map();
+    }
+    
+    // Clear expired cache entries
+    clearExpiredFineStatusCache();
+    
+    const results = new Map<number, { hasPendingFines: boolean; fineCount: number }>();
+    const booksToCheck: Array<{ id: number; isbn: string }> = [];
+    
+    // Check cache for each book
+    for (const book of books) {
+      if (!book.id || !book.isbn) continue;
+      
+      const cacheKey = `book_fine_status_${book.id}_${token.slice(-10)}`;
+      const cachedResult = bookFineStatusCache.get(cacheKey);
+      
+      if (cachedResult && Date.now() - cachedResult.timestamp < FINE_STATUS_CACHE_DURATION) {
+        results.set(book.id, { 
+          hasPendingFines: cachedResult.hasPendingFines, 
+          fineCount: cachedResult.hasPendingFines ? 1 : 0 
+        });
+      } else {
+        booksToCheck.push(book);
+      }
+    }
+    
+    // Fetch fines for books not in cache
+    if (booksToCheck.length > 0) {
+      const finesResponse = await getFines(token, 'pending');
+      
+      for (const book of booksToCheck) {
+        const bookFines = finesResponse.fines.filter(fine => fine.book_isbn === book.isbn);
+        const hasPendingFines = bookFines.length > 0;
+        const fineCount = bookFines.length;
+        
+        results.set(book.id, { hasPendingFines, fineCount });
+        
+        // Cache the result
+        const cacheKey = `book_fine_status_${book.id}_${token.slice(-10)}`;
+        bookFineStatusCache.set(cacheKey, {
+          hasPendingFines,
+          timestamp: Date.now(),
+          bookId: book.id
+        });
+      }
+    }
+    
+    return results;
+    
+  } catch (error) {
+    console.error('Error checking multiple books fine status:', error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes('timeout')) {
+        throw new Error('Request timed out while checking fine status. Please try again.');
+      } else if (error.message.includes('Authentication')) {
+        throw new Error('Authentication failed. Please log in again to check fine status.');
+      } else if (error.message.includes('Network')) {
+        throw new Error('Network error while checking fine status. Please check your connection.');
+      }
+    }
+    
+    // Return empty map to prevent UI crashes
+    return new Map();
+  }
+};
+
+export const clearBookFineStatusCache = (bookId?: number): void => {
+  if (bookId) {
+    // Clear cache for specific book
+    for (const [key, value] of bookFineStatusCache.entries()) {
+      if (value.bookId === bookId) {
+        bookFineStatusCache.delete(key);
+      }
+    }
+  } else {
+    // Clear entire cache
+    bookFineStatusCache.clear();
   }
 };
 

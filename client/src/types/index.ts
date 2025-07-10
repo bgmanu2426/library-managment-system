@@ -1,5 +1,3 @@
-// Core entity interfaces matching backend models exactly
-
 export interface User {
   id: number;
   name: string;
@@ -24,6 +22,7 @@ export interface Book {
   issued_to?: number; // Added from backend model
   issued_date?: string; // Added from backend model
   return_date?: string; // Added from backend model
+  hasPendingFines?: boolean; // Added for fine status checking
   created_at: string;
 }
 
@@ -80,6 +79,28 @@ export interface Fine {
   waived_at?: string;
   waived_by?: number;
   notes?: string;
+}
+
+export interface BookFineStatus {
+  bookId: number;
+  hasPendingFines: boolean;
+  fineCount: number;
+  totalFineAmount?: number;
+}
+
+export interface BookFineStatusResponse {
+  hasPendingFines: boolean;
+  fineCount: number;
+}
+
+export interface MultipleBooksFineStatusResponse {
+  [bookId: number]: BookFineStatusResponse;
+}
+
+export interface FineStatusCacheEntry {
+  hasPendingFines: boolean;
+  timestamp: number;
+  bookId: number;
 }
 
 // API Request payload interfaces
@@ -163,7 +184,9 @@ export interface IssueBookPayload {
 
 export interface ReturnBookPayload {
   book_id: number;
-  user_id: number;
+  user_id?: number;
+  isbn?: string;
+  user_usn?: string;
   condition?: string;
   notes?: string;
 }
@@ -228,6 +251,8 @@ export interface BookResponse {
   issued_to?: number; // Added from backend model
   issued_date?: string; // Added from backend model
   return_date?: string; // Added from backend model
+  hasPendingFines?: boolean; // Added for fine status checking
+  fineCount?: number; // Added for fine status checking
   created_at: string;
   rack_name?: string;
   shelf_name?: string;
@@ -288,6 +313,22 @@ export interface FineResponse {
   payment_method?: string;
 }
 
+export interface FineValidationError {
+  fine_id: number;
+  error_message: string;
+  book_title: string;
+  user_name: string;
+  fine_amount: number;
+  status: string;
+}
+
+export interface FinePaymentValidationResponse {
+  can_return_book: boolean;
+  pending_fines: Fine[];
+  total_pending_amount: number;
+  validation_errors?: FineValidationError[];
+}
+
 export interface PayFineResponse {
   message: string;
   fine_id: string;
@@ -302,6 +343,23 @@ export interface WaiveFineResponse {
   waived_at: string;
   waived_by_admin: string;
   reason: string;
+}
+
+export interface BookReturnResponse {
+  message: string;
+  book_title?: string;
+  user_name?: string;
+  return_date?: string;
+  fine_amount?: number;
+  days_overdue?: number;
+  warning?: string;
+  status: 'success' | 'warning';
+}
+
+export interface BookReturnValidationResponse {
+  success: boolean;
+  data?: BookReturnResponse;
+  error?: BookReturnErrorResponse;
 }
 
 export interface CalculateFinesResponse {
@@ -455,7 +513,39 @@ export interface ApiErrorResponse {
   detail: string;
   status_code?: number;
   message?: string;
+  error_code?: string;
+  error_type?: string;
   errors?: { [key: string]: string[] };
+  actionable_message?: string;
+  retry_after?: number;
+}
+
+export interface BookReturnValidationError {
+  error_code: 'BOOK_NOT_FOUND' | 'USER_NOT_FOUND' | 'BOOK_NOT_ISSUED' | 'UNPAID_FINES' | 'ALREADY_RETURNED' | 'INVALID_USER' | 'NO_ACTIVE_TRANSACTION';
+  message: string;
+  details?: string;
+  user_name?: string;
+  book_title?: string;
+  fine_amount?: number;
+  days_overdue?: number;
+}
+
+export interface FinePaymentRequiredError {
+  error_code: 'FINE_PAYMENT_REQUIRED';
+  message: string;
+  book_title: string;
+  user_name: string;
+  fine_amount: number;
+  days_overdue: number;
+  fine_id?: number;
+}
+
+export interface BookReturnErrorResponse {
+  detail: string;
+  status_code: number;
+  error_type: 'validation_error' | 'fine_payment_required' | 'not_found' | 'already_processed';
+  validation_error?: BookReturnValidationError;
+  fine_error?: FinePaymentRequiredError;
 }
 
 export interface ApiSuccessResponse<T> {
@@ -470,6 +560,22 @@ export interface ApiFailureResponse {
 }
 
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiFailureResponse;
+
+export interface DetailedApiError {
+  code: string;
+  message: string;
+  details?: string;
+  field?: string;
+  value?: any;
+}
+
+export interface EnhancedApiErrorResponse extends ApiErrorResponse {
+  errors?: DetailedApiError[];
+  suggestion?: string;
+  documentation_url?: string;
+}
+
+export type EnhancedApiResponse<T> = ApiSuccessResponse<T> | { error: EnhancedApiErrorResponse; success: false };
 
 // Auth context interface
 

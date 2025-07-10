@@ -134,6 +134,7 @@ const Login: React.FC = () => {
                   } focus:border-transparent transition-all duration-200 text-sm md:text-base`}
                   placeholder="Enter your email"
                   disabled={isLoading || loginInProgress}
+                  autoComplete="email"
                 />
               </div>
               {validationErrors.email && (
@@ -161,6 +162,7 @@ const Login: React.FC = () => {
                   } focus:border-transparent transition-all duration-200 text-sm md:text-base`}
                   placeholder="Enter your password"
                   disabled={isLoading || loginInProgress}
+                  autoComplete="current-password"
                 />
               </div>
               {validationErrors.password && (
