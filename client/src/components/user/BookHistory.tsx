@@ -11,14 +11,16 @@ import {
   ArrowLeft,
   DollarSign,
   RefreshCw,
-  Loader
+  Loader,
 } from 'lucide-react';
 import { getBookHistory, getCurrentBooks, getUserProfile } from '../../utils/api';
 import { BookHistoryResponse, User } from '../../types';
 
 const BookHistory: React.FC = () => {
   const { user } = useAuth();
-  const [filterStatus, setFilterStatus] = useState<'all' | 'current' | 'returned' | 'overdue'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'current' | 'returned' | 'overdue'>(
+    'all'
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [userHistory, setUserHistory] = useState<BookHistoryResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,7 +37,7 @@ const BookHistory: React.FC = () => {
     current: 0,
     returned: 0,
     overdue: 0,
-    totalFines: 0
+    totalFines: 0,
   });
 
   useEffect(() => {
@@ -80,14 +82,14 @@ const BookHistory: React.FC = () => {
 
         // Calculate statistics from all transactions
         const allTransactions = page === 0 ? transactions : [...userHistory, ...transactions];
-        
+
         // Get fresh stats by counting from the response data
         const statsData = {
           total: response.total || 0,
           current: allTransactions.filter(r => r.status === 'current').length,
           returned: allTransactions.filter(r => r.status === 'returned').length,
           overdue: allTransactions.filter(r => r.status === 'overdue').length,
-          totalFines: allTransactions.reduce((sum, r) => sum + (r.fine_amount || 0), 0)
+          totalFines: allTransactions.reduce((sum, r) => sum + (r.fine_amount || 0), 0),
         };
 
         setStats(statsData);
@@ -96,7 +98,9 @@ const BookHistory: React.FC = () => {
         if (err instanceof Error && err.message.includes('401')) {
           setError('Authentication expired. Please log in again.');
         } else {
-          setError(err instanceof Error ? err.message : 'An error occurred while loading your book history');
+          setError(
+            err instanceof Error ? err.message : 'An error occurred while loading your book history'
+          );
         }
       } finally {
         setIsLoading(false);
@@ -112,14 +116,14 @@ const BookHistory: React.FC = () => {
       const interval = setInterval(() => {
         setRefreshKey(prev => prev + 1);
       }, 30000);
-      
+
       return () => clearInterval(interval);
     }
   }, [filterStatus]);
 
   const handleSearch = useCallback(async () => {
     if (!user) return;
-    
+
     const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
     if (!token) return;
 
@@ -133,12 +137,13 @@ const BookHistory: React.FC = () => {
       );
 
       // Filter results based on search term
-      const filtered = (response.history || []).filter(record => 
-        record.book_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.book_author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.book_isbn.includes(searchTerm)
+      const filtered = (response.history || []).filter(
+        record =>
+          record.book_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          record.book_author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          record.book_isbn.includes(searchTerm)
       );
-      
+
       setUserHistory(filtered);
       setTotalRecords(filtered.length);
       setHasMore(false); // Disable pagination for search results
@@ -172,11 +177,11 @@ const BookHistory: React.FC = () => {
   // Filter and search client-side for current records, sorted by date
   const filteredHistory = userHistory
     .filter(record => {
-      const matchesSearch = searchTerm ? (
-        record.book_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.book_author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.book_isbn.includes(searchTerm)
-      ) : true;
+      const matchesSearch = searchTerm
+        ? record.book_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          record.book_author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          record.book_isbn.includes(searchTerm)
+        : true;
 
       return matchesSearch;
     })
@@ -189,19 +194,27 @@ const BookHistory: React.FC = () => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'current': return <Clock className="w-4 h-4 text-blue-600" />;
-      case 'returned': return <CheckCircle className="w-4 h-4 text-emerald-600" />;
-      case 'overdue': return <AlertTriangle className="w-4 h-4 text-red-600" />;
-      default: return <BookOpen className="w-4 h-4 text-gray-600" />;
+      case 'current':
+        return <Clock className="w-4 h-4 text-blue-600" />;
+      case 'returned':
+        return <CheckCircle className="w-4 h-4 text-emerald-600" />;
+      case 'overdue':
+        return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      default:
+        return <BookOpen className="w-4 h-4 text-gray-600" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'current': return 'text-blue-600 bg-blue-100';
-      case 'returned': return 'text-emerald-600 bg-emerald-100';
-      case 'overdue': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'current':
+        return 'text-blue-600 bg-blue-100';
+      case 'returned':
+        return 'text-emerald-600 bg-emerald-100';
+      case 'overdue':
+        return 'text-red-600 bg-red-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
     }
   };
 
@@ -211,7 +224,7 @@ const BookHistory: React.FC = () => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -398,7 +411,7 @@ const BookHistory: React.FC = () => {
                 type="text"
                 placeholder="Search by book title, author, or ISBN..."
                 value={searchTerm}
-                onChange={(e) => {
+                onChange={e => {
                   setSearchTerm(e.target.value);
                   if (e.target.value.trim() === '') {
                     // Reset to original data when search is cleared
@@ -406,7 +419,7 @@ const BookHistory: React.FC = () => {
                     setRefreshKey(prev => prev + 1);
                   }
                 }}
-                onKeyDown={(e) => {
+                onKeyDown={e => {
                   if (e.key === 'Enter') {
                     handleSearch();
                   }
@@ -428,7 +441,7 @@ const BookHistory: React.FC = () => {
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <select
                 value={filterStatus}
-                onChange={(e) => handleFilterChange(e.target.value as any)}
+                onChange={e => handleFilterChange(e.target.value as any)}
                 className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
               >
                 <option value="all">All Records</option>
@@ -457,8 +470,11 @@ const BookHistory: React.FC = () => {
         ) : (
           <>
             <div className="divide-y divide-gray-200">
-              {filteredHistory.map((record) => (
-                <div key={record.id} className="p-6 hover:bg-gray-50 transition-colors duration-200">
+              {filteredHistory.map(record => (
+                <div
+                  key={record.id}
+                  className="p-6 hover:bg-gray-50 transition-colors duration-200"
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-start space-x-4">
@@ -483,7 +499,9 @@ const BookHistory: React.FC = () => {
                               <Calendar className="w-4 h-4 text-gray-400" />
                               <div>
                                 <span className="text-gray-500">Issued:</span>
-                                <span className="ml-1 font-medium">{formatDate(record.issued_date)}</span>
+                                <span className="ml-1 font-medium">
+                                  {formatDate(record.issued_date)}
+                                </span>
                               </div>
                             </div>
 
@@ -491,19 +509,22 @@ const BookHistory: React.FC = () => {
                               <Clock className="w-4 h-4 text-gray-400" />
                               <div>
                                 <span className="text-gray-500">Due:</span>
-                                <span className="ml-1 font-medium">{formatDate(record.due_date)}</span>
+                                <span className="ml-1 font-medium">
+                                  {formatDate(record.due_date)}
+                                </span>
                                 {record.status === 'current' && (
-                                  <span className={`ml-2 text-xs px-2 py-1 rounded-full ${
-                                    getDaysRemaining(record.due_date) < 0
-                                      ? 'bg-red-100 text-red-800'
-                                      : getDaysRemaining(record.due_date) <= 3
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-blue-100 text-blue-800'
-                                  }`}>
+                                  <span
+                                    className={`ml-2 text-xs px-2 py-1 rounded-full ${
+                                      getDaysRemaining(record.due_date) < 0
+                                        ? 'bg-red-100 text-red-800'
+                                        : getDaysRemaining(record.due_date) <= 3
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : 'bg-blue-100 text-blue-800'
+                                    }`}
+                                  >
                                     {getDaysRemaining(record.due_date) < 0
                                       ? `${Math.abs(getDaysRemaining(record.due_date))} days overdue`
-                                      : `${getDaysRemaining(record.due_date)} days left`
-                                    }
+                                      : `${getDaysRemaining(record.due_date)} days left`}
                                   </span>
                                 )}
                               </div>
@@ -514,7 +535,9 @@ const BookHistory: React.FC = () => {
                                 <CheckCircle className="w-4 h-4 text-gray-400" />
                                 <div>
                                   <span className="text-gray-500">Returned:</span>
-                                  <span className="ml-1 font-medium">{formatDate(record.return_date)}</span>
+                                  <span className="ml-1 font-medium">
+                                    {formatDate(record.return_date)}
+                                  </span>
                                 </div>
                               </div>
                             )}
@@ -541,7 +564,9 @@ const BookHistory: React.FC = () => {
 
                     {/* Status Badge */}
                     <div className="flex-shrink-0 ml-4">
-                      <div className={`flex items-center space-x-2 px-3 py-2 rounded-full text-sm font-medium ${getStatusColor(record.status)}`}>
+                      <div
+                        className={`flex items-center space-x-2 px-3 py-2 rounded-full text-sm font-medium ${getStatusColor(record.status)}`}
+                      >
                         {getStatusIcon(record.status)}
                         <span className="capitalize">{record.status}</span>
                       </div>

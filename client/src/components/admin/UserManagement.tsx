@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  Users, 
-  Plus, 
-  Search, 
+import {
+  Users,
+  Plus,
+  Search,
   Filter,
   Edit3,
   Trash2,
@@ -14,14 +14,9 @@ import {
   AlertTriangle,
   RefreshCw,
   Loader,
-  CheckCircle
+  CheckCircle,
 } from 'lucide-react';
-import { 
-  getUsers, 
-  createUser, 
-  updateUser, 
-  deleteUser 
-} from '../../utils/api';
+import { getUsers, createUser, updateUser, deleteUser } from '../../utils/api';
 import { User as AppUser, UserCreatePayload, UserUpdatePayload } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -62,7 +57,7 @@ const UserManagement: React.FC = () => {
     mobile: '',
     address: '',
     role: 'user',
-    password: ''
+    password: '',
   });
 
   const auth = useAuth();
@@ -70,8 +65,11 @@ const UserManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [page, setPage] = useState(0);
   const [limit] = useState(50);
@@ -127,29 +125,38 @@ const UserManagement: React.FC = () => {
     }
   }, [auth.user, page, limit]);
 
-  const handleSearch = useCallback(async (term: string) => {
-    if (!term.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      if (!token) {
-        setIsSearching(false);
+  const handleSearch = useCallback(
+    async (term: string) => {
+      if (!term.trim()) {
+        setSearchResults([]);
         return;
       }
 
-      const response = await getUsers(token, 0, 100, term, filterRole === 'all' ? undefined : filterRole);
-      setSearchResults(response.users || []);
-    } catch (err) {
-      console.error('Search failed:', err);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [filterRole]);
+      setIsSearching(true);
+      try {
+        const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+        if (!token) {
+          setIsSearching(false);
+          return;
+        }
+
+        const response = await getUsers(
+          token,
+          0,
+          100,
+          term,
+          filterRole === 'all' ? undefined : filterRole
+        );
+        setSearchResults(response.users || []);
+      } catch (err) {
+        console.error('Search failed:', err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [filterRole]
+  );
 
   useEffect(() => {
     fetchUsers();
@@ -178,56 +185,64 @@ const UserManagement: React.FC = () => {
 
   const filteredUsers = useMemo(() => {
     // Ensure we have valid arrays to work with
-    const sourceUsers = searchTerm ? (Array.isArray(searchResults) ? searchResults : []) : (Array.isArray(users) ? users : []);
-    
+    const sourceUsers = searchTerm
+      ? Array.isArray(searchResults)
+        ? searchResults
+        : []
+      : Array.isArray(users)
+        ? users
+        : [];
+
     return sourceUsers.filter(user => {
       // Add null/undefined checks for user properties
       if (!user || typeof user !== 'object') return false;
-      
+
       const matchesFilter = filterRole === 'all' || (user.role && user.role === filterRole);
       return matchesFilter;
     });
   }, [searchTerm, searchResults, users, filterRole]);
 
-  const validateUserForm = (userData: UserCreatePayload | UserUpdatePayload): {[key: string]: string} => {
-    const errors: {[key: string]: string} = {};
-    
+  const validateUserForm = (
+    userData: UserCreatePayload | UserUpdatePayload
+  ): { [key: string]: string } => {
+    const errors: { [key: string]: string } = {};
+
     if (!userData.name?.trim()) {
       errors.name = 'Name is required';
     } else if (userData.name.trim().length < 2) {
       errors.name = 'Name must be at least 2 characters long';
     }
-    
+
     if ('usn' in userData && !userData.usn?.trim()) {
       errors.usn = 'USN is required';
     } else if ('usn' in userData && userData.usn && !/^[A-Z0-9]+$/i.test(userData.usn.trim())) {
       errors.usn = 'USN must contain only letters and numbers';
     }
-    
+
     if (!userData.email?.trim()) {
       errors.email = 'Email is required';
     } else if (!/^\S+@\S+\.\S+$/.test(userData.email)) {
       errors.email = 'Please enter a valid email address';
     }
-    
+
     if (!userData.mobile?.trim()) {
       errors.mobile = 'Mobile number is required';
     } else if (!/^\d{10}$/.test(userData.mobile.replace(/\D/g, ''))) {
       errors.mobile = 'Please enter a valid 10-digit mobile number';
     }
-    
+
     if (!userData.address?.trim()) {
       errors.address = 'Address is required';
     } else if (userData.address.trim().length < 10) {
       errors.address = 'Address must be at least 10 characters long';
     }
-    
+
     if ('password' in userData && !userData.password && !selectedUser) {
       errors.password = 'Password is required for new users';
     } else if ('password' in userData && userData.password && userData.password.length < 6) {
       errors.password = 'Password must be at least 6 characters long';
     }
-    
+
     return errors;
   };
 
@@ -244,7 +259,7 @@ const UserManagement: React.FC = () => {
       mobile: newUser.mobile,
       address: newUser.address,
       role: newUser.role,
-      password: newUser.password
+      password: newUser.password,
     };
 
     const errors = validateUserForm(userData);
@@ -268,7 +283,7 @@ const UserManagement: React.FC = () => {
         mobile: '',
         address: '',
         role: 'user',
-        password: ''
+        password: '',
       });
       setShowAddModal(false);
       handleRefresh();
@@ -312,10 +327,10 @@ const UserManagement: React.FC = () => {
       email: selectedUser.email,
       mobile: selectedUser.mobile,
       address: selectedUser.address,
-      role: selectedUser.role
+      role: selectedUser.role,
     };
 
-    const errors = validateUserForm({...userData, usn: selectedUser.usn, password: ''});
+    const errors = validateUserForm({ ...userData, usn: selectedUser.usn, password: '' });
     setFormErrors(errors);
 
     if (Object.keys(errors).length > 0) return;
@@ -384,7 +399,10 @@ const UserManagement: React.FC = () => {
         if (err.message.includes('not found')) {
           showNotification('error', 'User not found. Please refresh and try again.');
         } else if (err.message.includes('active book loans')) {
-          showNotification('error', 'Cannot delete user with active book loans. Please return all books first.');
+          showNotification(
+            'error',
+            'Cannot delete user with active book loans. Please return all books first.'
+          );
         } else if (err.message.includes('401')) {
           showNotification('error', 'Authentication expired. Please log in again.');
         } else if (err.message.includes('403')) {
@@ -466,7 +484,7 @@ const UserManagement: React.FC = () => {
                 type="text"
                 placeholder="Search users by name, email, or USN..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -476,7 +494,7 @@ const UserManagement: React.FC = () => {
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <select
                 value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value as 'all' | 'admin' | 'user')}
+                onChange={e => setFilterRole(e.target.value as 'all' | 'admin' | 'user')}
                 className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
               >
                 <option value="all">All Roles</option>
@@ -488,9 +506,19 @@ const UserManagement: React.FC = () => {
 
           {/* Add User Button */}
           <button
-            onClick={() => {setShowAddModal(true); setFormErrors({}); setNewUser({
-              name: '', usn: '', email: '', mobile: '', address: '', role: 'user', password: ''
-            })}}
+            onClick={() => {
+              setShowAddModal(true);
+              setFormErrors({});
+              setNewUser({
+                name: '',
+                usn: '',
+                email: '',
+                mobile: '',
+                address: '',
+                role: 'user',
+                password: '',
+              });
+            }}
             className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200"
           >
             <Plus className="w-5 h-5" />
@@ -512,25 +540,37 @@ const UserManagement: React.FC = () => {
             <Users className="w-8 h-8 text-blue-600" />
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Administrators</p>
               <p className="text-2xl font-bold text-purple-600">
-                {isLoading ? <Loader className="w-6 h-6 animate-spin" /> : (Array.isArray(filteredUsers) ? filteredUsers.filter(user => user && user.role === 'admin').length : 0)}
+                {isLoading ? (
+                  <Loader className="w-6 h-6 animate-spin" />
+                ) : Array.isArray(filteredUsers) ? (
+                  filteredUsers.filter(user => user && user.role === 'admin').length
+                ) : (
+                  0
+                )}
               </p>
             </div>
             <User className="w-8 h-8 text-purple-600" />
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Students</p>
               <p className="text-2xl font-bold text-emerald-600">
-                {isLoading ? <Loader className="w-6 h-6 animate-spin" /> : (Array.isArray(filteredUsers) ? filteredUsers.filter(user => user && user.role === 'user').length : 0)}
+                {isLoading ? (
+                  <Loader className="w-6 h-6 animate-spin" />
+                ) : Array.isArray(filteredUsers) ? (
+                  filteredUsers.filter(user => user && user.role === 'user').length
+                ) : (
+                  0
+                )}
               </p>
             </div>
             <Users className="w-8 h-8 text-emerald-600" />
@@ -545,7 +585,7 @@ const UserManagement: React.FC = () => {
             Users ({Array.isArray(filteredUsers) ? filteredUsers.length : 0})
           </h3>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -568,71 +608,85 @@ const UserManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {Array.isArray(filteredUsers) ? filteredUsers.map((user) => {
-                // Add defensive checks for user object and required properties
-                if (!user || typeof user !== 'object' || !user.id) return null;
-                
-                return (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-                            <span className="text-sm font-medium text-white">
-                              {(user.name || 'Unknown').split(' ').map(n => n[0] || '').join('').substring(0, 2)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.name || 'Unknown Name'}</div>
-                          <div className="text-sm text-gray-500">USN: {user.usn || 'N/A'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 flex items-center">
-                        <Mail className="w-4 h-4 mr-1 text-gray-400" />
-                        {user.email || 'No email'}
-                      </div>
-                      <div className="text-sm text-gray-500 flex items-center">
-                        <Phone className="w-4 h-4 mr-1 text-gray-400" />
-                        {user.mobile || 'No phone'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getRoleBadge(user.role || 'user')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex items-center">
-                        <Calendar className="w-4 h-4 mr-1 text-gray-400" />
-                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button 
-                        onClick={() => handleEditUser(user)}
-                        disabled={isOperationLoading}
-                        className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
-                        title="Edit User"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteUser(user)}
-                        disabled={isOperationLoading}
-                        className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded disabled:opacity-50"
-                        title="Delete User"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              }).filter(Boolean) : []}
+              {Array.isArray(filteredUsers)
+                ? filteredUsers
+                    .map(user => {
+                      // Add defensive checks for user object and required properties
+                      if (!user || typeof user !== 'object' || !user.id) return null;
+
+                      return (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-white">
+                                    {(user.name || 'Unknown')
+                                      .split(' ')
+                                      .map(n => n[0] || '')
+                                      .join('')
+                                      .substring(0, 2)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {user.name || 'Unknown Name'}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  USN: {user.usn || 'N/A'}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900 flex items-center">
+                              <Mail className="w-4 h-4 mr-1 text-gray-400" />
+                              {user.email || 'No email'}
+                            </div>
+                            <div className="text-sm text-gray-500 flex items-center">
+                              <Phone className="w-4 h-4 mr-1 text-gray-400" />
+                              {user.mobile || 'No phone'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getRoleBadge(user.role || 'user')}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <Calendar className="w-4 h-4 mr-1 text-gray-400" />
+                              {user.created_at
+                                ? new Date(user.created_at).toLocaleDateString()
+                                : 'Unknown'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <button
+                              onClick={() => handleEditUser(user)}
+                              disabled={isOperationLoading}
+                              className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
+                              title="Edit User"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              disabled={isOperationLoading}
+                              className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded disabled:opacity-50"
+                              title="Delete User"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                    .filter(Boolean)
+                : []}
             </tbody>
           </table>
         </div>
-        
+
         {filteredUsers.length === 0 && (
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -645,7 +699,8 @@ const UserManagement: React.FC = () => {
           <div className="px-6 py-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-700">
-                Showing {Math.min(page * limit + 1, totalUsers)} to {Math.min((page + 1) * limit, totalUsers)} of {totalUsers} users
+                Showing {Math.min(page * limit + 1, totalUsers)} to{' '}
+                {Math.min((page + 1) * limit, totalUsers)} of {totalUsers} users
               </div>
               <div className="flex items-center space-x-2">
                 <button
@@ -696,7 +751,7 @@ const UserManagement: React.FC = () => {
                 <input
                   type="text"
                   value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  onChange={e => setNewUser({ ...newUser, name: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.name ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   placeholder="Enter full name"
                 />
@@ -707,7 +762,7 @@ const UserManagement: React.FC = () => {
                 <input
                   type="text"
                   value={newUser.usn}
-                  onChange={(e) => setNewUser({ ...newUser, usn: e.target.value })}
+                  onChange={e => setNewUser({ ...newUser, usn: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.usn ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   placeholder="Enter USN"
                 />
@@ -718,39 +773,47 @@ const UserManagement: React.FC = () => {
                 <input
                   type="email"
                   value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  onChange={e => setNewUser({ ...newUser, email: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.email ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   placeholder="Enter email address"
                 />
-                {formErrors.email && <p className="mt-1 text-red-500 text-xs">{formErrors.email}</p>}
+                {formErrors.email && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Mobile</label>
                 <input
                   type="tel"
                   value={newUser.mobile}
-                  onChange={(e) => setNewUser({ ...newUser, mobile: e.target.value })}
+                  onChange={e => setNewUser({ ...newUser, mobile: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.mobile ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   placeholder="Enter mobile number"
                 />
-                {formErrors.mobile && <p className="mt-1 text-red-500 text-xs">{formErrors.mobile}</p>}
+                {formErrors.mobile && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.mobile}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
                 <textarea
                   value={newUser.address}
-                  onChange={(e) => setNewUser({ ...newUser, address: e.target.value })}
+                  onChange={e => setNewUser({ ...newUser, address: e.target.value })}
                   rows={3}
                   className={`w-full px-4 py-3 border ${formErrors.address ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent resize-none`}
                   placeholder="Enter address"
                 />
-                {formErrors.address && <p className="mt-1 text-red-500 text-xs">{formErrors.address}</p>}
+                {formErrors.address && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.address}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
                 <select
                   value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value as 'admin' | 'user' })}
+                  onChange={e =>
+                    setNewUser({ ...newUser, role: e.target.value as 'admin' | 'user' })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="user">Student</option>
@@ -762,11 +825,13 @@ const UserManagement: React.FC = () => {
                 <input
                   type="password"
                   value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  onChange={e => setNewUser({ ...newUser, password: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.password ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   placeholder="Enter password"
                 />
-                {formErrors.password && <p className="mt-1 text-red-500 text-xs">{formErrors.password}</p>}
+                {formErrors.password && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.password}</p>
+                )}
               </div>
             </div>
             <div className="flex justify-end space-x-3 mt-6">
@@ -808,7 +873,7 @@ const UserManagement: React.FC = () => {
                 <input
                   type="text"
                   value={selectedUser.name}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, name: e.target.value })}
+                  onChange={e => setSelectedUser({ ...selectedUser, name: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.name ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                 />
                 {formErrors.name && <p className="mt-1 text-red-500 text-xs">{formErrors.name}</p>}
@@ -828,36 +893,44 @@ const UserManagement: React.FC = () => {
                 <input
                   type="email"
                   value={selectedUser.email}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, email: e.target.value })}
+                  onChange={e => setSelectedUser({ ...selectedUser, email: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.email ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                 />
-                {formErrors.email && <p className="mt-1 text-red-500 text-xs">{formErrors.email}</p>}
+                {formErrors.email && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.email}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Mobile</label>
                 <input
                   type="tel"
                   value={selectedUser.mobile}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, mobile: e.target.value })}
+                  onChange={e => setSelectedUser({ ...selectedUser, mobile: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.mobile ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                 />
-                {formErrors.mobile && <p className="mt-1 text-red-500 text-xs">{formErrors.mobile}</p>}
+                {formErrors.mobile && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.mobile}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
                 <textarea
                   value={selectedUser.address}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, address: e.target.value })}
+                  onChange={e => setSelectedUser({ ...selectedUser, address: e.target.value })}
                   rows={3}
                   className={`w-full px-4 py-3 border ${formErrors.address ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent resize-none`}
                 />
-                {formErrors.address && <p className="mt-1 text-red-500 text-xs">{formErrors.address}</p>}
+                {formErrors.address && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.address}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
                 <select
                   value={selectedUser.role}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value as 'admin' | 'user' })}
+                  onChange={e =>
+                    setSelectedUser({ ...selectedUser, role: e.target.value as 'admin' | 'user' })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="user">Student</option>
@@ -928,9 +1001,11 @@ const UserManagement: React.FC = () => {
 
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
-          notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
+        <div
+          className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
+            notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+          }`}
+        >
           <div className="flex items-center space-x-2">
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5" />

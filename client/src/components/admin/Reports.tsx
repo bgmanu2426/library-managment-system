@@ -16,21 +16,21 @@ import {
   Loader2,
   RefreshCw,
   Loader,
-  Search
+  Search,
 } from 'lucide-react';
-import { 
+import {
   getUserActivityReport,
-  getBookCirculationReport, 
+  getBookCirculationReport,
   getOverdueSummaryReport,
   getInventoryStatusReport,
   exportReportExcel,
-  exportReportPDF
+  exportReportPDF,
 } from '../../utils/api';
 import {
   UserActivityReport,
   BookCirculationReport,
   OverdueSummaryReport,
-  InventoryStatusReport
+  InventoryStatusReport,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,17 +38,22 @@ const Reports: React.FC = () => {
   const auth = useAuth();
 
   // State management
-  const [reportType, setReportType] = useState<'user-activity' | 'book-circulation' | 'overdue-summary' | 'inventory-status'>('user-activity');
+  const [reportType, setReportType] = useState<
+    'user-activity' | 'book-circulation' | 'overdue-summary' | 'inventory-status'
+  >('user-activity');
   const [dateRange, setDateRange] = useState({
     start_date: '',
-    end_date: ''
+    end_date: '',
   });
   const [customDateRange, setCustomDateRange] = useState('last30days');
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
@@ -57,7 +62,9 @@ const Reports: React.FC = () => {
   const [userActivityData, setUserActivityData] = useState<UserActivityReport[]>([]);
   const [bookCirculationData, setBookCirculationData] = useState<BookCirculationReport[]>([]);
   const [overdueSummaryData, setOverdueSummaryData] = useState<OverdueSummaryReport | null>(null);
-  const [inventoryStatusData, setInventoryStatusData] = useState<InventoryStatusReport | null>(null);
+  const [inventoryStatusData, setInventoryStatusData] = useState<InventoryStatusReport | null>(
+    null
+  );
 
   // Filter states
   const [userIdFilter, setUserIdFilter] = useState<number | ''>('');
@@ -85,10 +92,20 @@ const Reports: React.FC = () => {
 
         // Fetch all report types
         const [userActivity, bookCirculation, overdueSummary, inventoryStatus] = await Promise.all([
-          getUserActivityReport(token, dateParams.start_date, dateParams.end_date, userIdFilter || undefined),
-          getBookCirculationReport(token, dateParams.start_date, dateParams.end_date, genreFilter || undefined),
+          getUserActivityReport(
+            token,
+            dateParams.start_date,
+            dateParams.end_date,
+            userIdFilter || undefined
+          ),
+          getBookCirculationReport(
+            token,
+            dateParams.start_date,
+            dateParams.end_date,
+            genreFilter || undefined
+          ),
           getOverdueSummaryReport(token, dateParams.start_date, dateParams.end_date),
-          getInventoryStatusReport(token)
+          getInventoryStatusReport(token),
         ]);
 
         setUserActivityData(userActivity.user_activity_report || []);
@@ -120,7 +137,7 @@ const Reports: React.FC = () => {
       clearInterval(refreshInterval);
       setRefreshInterval(null);
     }
-    
+
     return () => {
       if (refreshInterval) {
         clearInterval(refreshInterval);
@@ -152,7 +169,7 @@ const Reports: React.FC = () => {
       case 'custom':
         return {
           start_date: dateRange.start_date,
-          end_date: dateRange.end_date
+          end_date: dateRange.end_date,
         };
       default:
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -172,7 +189,7 @@ const Reports: React.FC = () => {
 
   const validateDateRange = (): boolean => {
     if (customDateRange === 'custom') {
-      const errors: {[key: string]: string} = {};
+      const errors: { [key: string]: string } = {};
 
       if (!dateRange.start_date) {
         errors.start_date = 'Start date is required';
@@ -180,7 +197,11 @@ const Reports: React.FC = () => {
       if (!dateRange.end_date) {
         errors.end_date = 'End date is required';
       }
-      if (dateRange.start_date && dateRange.end_date && new Date(dateRange.start_date) > new Date(dateRange.end_date)) {
+      if (
+        dateRange.start_date &&
+        dateRange.end_date &&
+        new Date(dateRange.start_date) > new Date(dateRange.end_date)
+      ) {
         errors.date_range = 'Start date must be before end date';
       }
 
@@ -209,7 +230,8 @@ const Reports: React.FC = () => {
       const exportParams: Record<string, string> = {};
       if (dateParams.start_date) exportParams.start_date = dateParams.start_date;
       if (dateParams.end_date) exportParams.end_date = dateParams.end_date;
-      if (userIdFilter && reportType === 'user-activity') exportParams.user_id = userIdFilter.toString();
+      if (userIdFilter && reportType === 'user-activity')
+        exportParams.user_id = userIdFilter.toString();
       if (genreFilter && reportType === 'book-circulation') exportParams.genre = genreFilter;
 
       const blob = await exportReportExcel(token, reportType, exportParams);
@@ -228,7 +250,10 @@ const Reports: React.FC = () => {
       if (err instanceof Error && err.message.includes('401')) {
         showNotification('error', 'Authentication expired. Please log in again.');
       } else {
-        showNotification('error', err instanceof Error ? err.message : 'Failed to export Excel report');
+        showNotification(
+          'error',
+          err instanceof Error ? err.message : 'Failed to export Excel report'
+        );
       }
     } finally {
       setIsOperationLoading(false);
@@ -253,7 +278,8 @@ const Reports: React.FC = () => {
       const exportParams: Record<string, string> = {};
       if (dateParams.start_date) exportParams.start_date = dateParams.start_date;
       if (dateParams.end_date) exportParams.end_date = dateParams.end_date;
-      if (userIdFilter && reportType === 'user-activity') exportParams.user_id = userIdFilter.toString();
+      if (userIdFilter && reportType === 'user-activity')
+        exportParams.user_id = userIdFilter.toString();
       if (genreFilter && reportType === 'book-circulation') exportParams.genre = genreFilter;
 
       const blob = await exportReportPDF(token, reportType, exportParams);
@@ -272,7 +298,10 @@ const Reports: React.FC = () => {
       if (err instanceof Error && err.message.includes('401')) {
         showNotification('error', 'Authentication expired. Please log in again.');
       } else {
-        showNotification('error', err instanceof Error ? err.message : 'Failed to export PDF report');
+        showNotification(
+          'error',
+          err instanceof Error ? err.message : 'Failed to export PDF report'
+        );
       }
     } finally {
       setIsOperationLoading(false);
@@ -291,16 +320,28 @@ const Reports: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Borrowed</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Books</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overdue</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fines</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Activity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total Borrowed
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Current Books
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Overdue
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Fines
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Last Activity
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {userActivityData.map((user) => (
+                  {userActivityData.map(user => (
                     <tr key={user.user_id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -308,16 +349,26 @@ const Reports: React.FC = () => {
                           <div className="text-sm text-gray-500">{user.user_usn}</div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.total_books_borrowed}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.current_books}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {user.total_books_borrowed}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {user.current_books}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${user.overdue_books > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${user.overdue_books > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}
+                        >
                           {user.overdue_books}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{user.total_fines}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ₹{user.total_fines}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'}
+                        {user.last_activity
+                          ? new Date(user.last_activity).toLocaleDateString()
+                          : 'N/A'}
                       </td>
                     </tr>
                   ))}
@@ -327,7 +378,9 @@ const Reports: React.FC = () => {
             {userActivityData.length === 0 && (
               <div className="text-center py-8">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No user activity data found for the selected period.</p>
+                <p className="text-gray-500">
+                  No user activity data found for the selected period.
+                </p>
               </div>
             )}
             {/* Pagination for user activity report */}
@@ -359,15 +412,25 @@ const Reports: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Issues</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days Borrowed</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Issued</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Book
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total Issues
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Days Borrowed
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Last Issued
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {bookCirculationData.map((book) => (
+                  {bookCirculationData.map(book => (
                     <tr key={book.book_id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -376,15 +439,23 @@ const Reports: React.FC = () => {
                           <div className="text-xs text-gray-400">{book.book_isbn}</div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.total_issues}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {book.total_issues}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${book.current_status === 'Available' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${book.current_status === 'Available' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}
+                        >
                           {book.current_status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{book.total_days_borrowed}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {book.total_days_borrowed}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'Never'}
+                        {book.last_issued
+                          ? new Date(book.last_issued).toLocaleDateString()
+                          : 'Never'}
                       </td>
                     </tr>
                   ))}
@@ -394,7 +465,9 @@ const Reports: React.FC = () => {
             {bookCirculationData.length === 0 && (
               <div className="text-center py-8">
                 <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No book circulation data found for the selected period.</p>
+                <p className="text-gray-500">
+                  No book circulation data found for the selected period.
+                </p>
               </div>
             )}
           </div>
@@ -410,7 +483,9 @@ const Reports: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Overdue Books</p>
-                  <p className="text-2xl font-bold text-gray-900">{overdueSummaryData.total_overdue_books}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {overdueSummaryData.total_overdue_books}
+                  </p>
                 </div>
               </div>
             </div>
@@ -421,7 +496,9 @@ const Reports: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Pending Fines</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{overdueSummaryData.total_pending_fines}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    ₹{overdueSummaryData.total_pending_fines}
+                  </p>
                 </div>
               </div>
             </div>
@@ -432,7 +509,9 @@ const Reports: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Paid Fines</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{overdueSummaryData.total_paid_fines}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    ₹{overdueSummaryData.total_paid_fines}
+                  </p>
                 </div>
               </div>
             </div>
@@ -443,7 +522,9 @@ const Reports: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Avg Overdue Days</p>
-                  <p className="text-2xl font-bold text-gray-900">{overdueSummaryData.average_overdue_days}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {overdueSummaryData.average_overdue_days}
+                  </p>
                 </div>
               </div>
             </div>
@@ -461,7 +542,9 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Books</p>
-                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.total_books}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {inventoryStatusData.total_books}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -472,7 +555,9 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Available</p>
-                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.available_books}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {inventoryStatusData.available_books}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -483,7 +568,9 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Issued</p>
-                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.issued_books}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {inventoryStatusData.issued_books}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -494,7 +581,9 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Shelves</p>
-                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData.total_shelves}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {inventoryStatusData.total_shelves}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -503,17 +592,22 @@ const Reports: React.FC = () => {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Shelf Utilization</h3>
               <div className="space-y-4">
-                {inventoryStatusData.shelf_utilization.map((shelf) => (
+                {inventoryStatusData.shelf_utilization.map(shelf => (
                   <div key={shelf.shelf_id} className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium text-gray-700">{shelf.shelf_name}</span>
-                      <span className="text-gray-600">{shelf.current_books}/{shelf.capacity} ({shelf.utilization_percentage}%)</span>
+                      <span className="text-gray-600">
+                        {shelf.current_books}/{shelf.capacity} ({shelf.utilization_percentage}%)
+                      </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className={`h-2 rounded-full transition-all duration-1000 ease-out ${
-                          shelf.utilization_percentage >= 90 ? 'bg-red-500' :
-                          shelf.utilization_percentage >= 75 ? 'bg-amber-500' : 'bg-green-500'
+                          shelf.utilization_percentage >= 90
+                            ? 'bg-red-500'
+                            : shelf.utilization_percentage >= 75
+                              ? 'bg-amber-500'
+                              : 'bg-green-500'
                         }`}
                         style={{ width: `${shelf.utilization_percentage}%` }}
                       ></div>
@@ -581,8 +675,8 @@ const Reports: React.FC = () => {
         <button
           onClick={() => setAutoRefresh(!autoRefresh)}
           className={`absolute top-4 right-16 p-2 rounded-full transition-colors ${
-            autoRefresh 
-              ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
+            autoRefresh
+              ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
               : 'bg-white/20 text-white hover:bg-white/30'
           }`}
           title={autoRefresh ? 'Disable Auto-refresh' : 'Enable Auto-refresh'}
@@ -605,7 +699,7 @@ const Reports: React.FC = () => {
                 <BarChart3 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
                   value={reportType}
-                  onChange={(e) => setReportType(e.target.value as any)}
+                  onChange={e => setReportType(e.target.value as any)}
                   className="w-full pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
                 >
                   <option value="user-activity">User Activity Report</option>
@@ -623,7 +717,7 @@ const Reports: React.FC = () => {
                 <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
                   value={customDateRange}
-                  onChange={(e) => setCustomDateRange(e.target.value)}
+                  onChange={e => setCustomDateRange(e.target.value)}
                   className="w-full pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
                 >
                   <option value="last7days">Last 7 Days</option>
@@ -644,20 +738,34 @@ const Reports: React.FC = () => {
                   <input
                     type="date"
                     value={dateRange.start_date.split('T')[0] || ''}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, start_date: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
+                    onChange={e =>
+                      setDateRange(prev => ({
+                        ...prev,
+                        start_date: e.target.value ? new Date(e.target.value).toISOString() : '',
+                      }))
+                    }
                     className={`w-full px-3 py-2 border ${formErrors.start_date ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   />
-                  {formErrors.start_date && <p className="mt-1 text-red-500 text-xs">{formErrors.start_date}</p>}
+                  {formErrors.start_date && (
+                    <p className="mt-1 text-red-500 text-xs">{formErrors.start_date}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
                   <input
                     type="date"
                     value={dateRange.end_date.split('T')[0] || ''}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, end_date: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
+                    onChange={e =>
+                      setDateRange(prev => ({
+                        ...prev,
+                        end_date: e.target.value ? new Date(e.target.value).toISOString() : '',
+                      }))
+                    }
                     className={`w-full px-3 py-2 border ${formErrors.end_date ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   />
-                  {formErrors.end_date && <p className="mt-1 text-red-500 text-xs">{formErrors.end_date}</p>}
+                  {formErrors.end_date && (
+                    <p className="mt-1 text-red-500 text-xs">{formErrors.end_date}</p>
+                  )}
                 </div>
                 {formErrors.date_range && (
                   <div className="col-span-2">
@@ -670,11 +778,13 @@ const Reports: React.FC = () => {
             {/* Additional Filters */}
             {reportType === 'user-activity' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">User ID Filter (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  User ID Filter (Optional)
+                </label>
                 <input
                   type="number"
                   value={userIdFilter}
-                  onChange={(e) => setUserIdFilter(e.target.value ? parseInt(e.target.value) : '')}
+                  onChange={e => setUserIdFilter(e.target.value ? parseInt(e.target.value) : '')}
                   placeholder="Filter by specific user ID"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
@@ -683,17 +793,19 @@ const Reports: React.FC = () => {
 
             {reportType === 'book-circulation' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Genre Filter (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Genre Filter (Optional)
+                </label>
                 <input
                   type="text"
                   value={genreFilter}
-                  onChange={(e) => setGenreFilter(e.target.value)}
+                  onChange={e => setGenreFilter(e.target.value)}
                   placeholder="Filter by genre"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
             )}
-            
+
             {/* Search Filter */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
@@ -703,7 +815,7 @@ const Reports: React.FC = () => {
                   type="text"
                   placeholder={`Search ${reportType.replace('-', ' ')} data...`}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  onChange={(e) => {
+                  onChange={e => {
                     // Implement search logic based on report type
                     const searchTerm = e.target.value.toLowerCase();
                     if (reportType === 'user-activity') {
@@ -721,7 +833,9 @@ const Reports: React.FC = () => {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">Export Options</h3>
             <div className="space-y-2">
-              <p className="text-sm text-gray-600">Generate downloadable reports in your preferred format:</p>
+              <p className="text-sm text-gray-600">
+                Generate downloadable reports in your preferred format:
+              </p>
               <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
                 <button
                   onClick={handleExportExcel}
@@ -761,10 +875,12 @@ const Reports: React.FC = () => {
                 <div className="flex-1">
                   <h4 className="text-sm font-medium text-blue-900 mb-1">Export Information</h4>
                   <p className="text-sm text-blue-700">
-                    <strong>PDF:</strong> Comprehensive report with tables and visual analytics. Perfect for presentations and formal documentation.
+                    <strong>PDF:</strong> Comprehensive report with tables and visual analytics.
+                    Perfect for presentations and formal documentation.
                   </p>
                   <p className="text-sm text-blue-700 mt-1">
-                    <strong>Excel:</strong> Raw data export for further analysis in spreadsheet applications or data processing tools.
+                    <strong>Excel:</strong> Raw data export for further analysis in spreadsheet
+                    applications or data processing tools.
                   </p>
                 </div>
               </div>
@@ -778,9 +894,11 @@ const Reports: React.FC = () => {
 
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
-          notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
+        <div
+          className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
+            notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+          }`}
+        >
           <div className="flex items-center space-x-2">
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5" />

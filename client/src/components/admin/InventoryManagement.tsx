@@ -15,7 +15,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Building,
-  Grid3X3
+  Grid3X3,
 } from 'lucide-react';
 import {
   getBooks,
@@ -27,7 +27,7 @@ import {
   getRacks,
   getShelves,
   createRack,
-  createShelf
+  createShelf,
 } from '../../utils/api';
 import {
   Book as BookType,
@@ -37,7 +37,7 @@ import {
   Rack,
   Shelf,
   RackCreatePayload,
-  ShelfCreatePayload
+  ShelfCreatePayload,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -51,7 +51,7 @@ const InventoryManagement: React.FC = () => {
   const [issueData, setIssueData] = useState({
     bookId: '',
     userId: '',
-    dueDate: ''
+    dueDate: '',
   });
 
   // Return form data
@@ -59,7 +59,7 @@ const InventoryManagement: React.FC = () => {
     bookId: '',
     userId: '',
     condition: 'good',
-    notes: ''
+    notes: '',
   });
 
   const { user } = useAuth();
@@ -69,7 +69,10 @@ const InventoryManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
@@ -88,13 +91,13 @@ const InventoryManagement: React.FC = () => {
   const [newRack, setNewRack] = useState<RackCreatePayload>({
     name: '',
     location: '',
-    description: ''
+    description: '',
   });
   const [newShelf, setNewShelf] = useState<ShelfCreatePayload>({
     name: '',
     rack_id: 0,
     capacity: 50,
-    description: ''
+    description: '',
   });
 
   const fetchData = useCallback(async () => {
@@ -113,13 +116,14 @@ const InventoryManagement: React.FC = () => {
         throw new Error('Authentication token not found');
       }
 
-      const [booksResponse, usersResponse, activityResponse, racksResponse, shelvesResponse] = await Promise.all([
-        getBooks(token, currentPage * itemsPerPage, itemsPerPage),
-        getUsers(token, 0, 1000),
-        getRecentActivity(token),
-        getRacks(token),
-        getShelves(token)
-      ]);
+      const [booksResponse, usersResponse, activityResponse, racksResponse, shelvesResponse] =
+        await Promise.all([
+          getBooks(token, currentPage * itemsPerPage, itemsPerPage),
+          getUsers(token, 0, 1000),
+          getRecentActivity(token),
+          getRacks(token),
+          getShelves(token),
+        ]);
 
       // Handle proper response format from updated API for books
       if (booksResponse && typeof booksResponse === 'object') {
@@ -171,7 +175,6 @@ const InventoryManagement: React.FC = () => {
       } else {
         setShelves([]);
       }
-
     } catch (err) {
       console.error('Failed to fetch inventory data:', err);
       if (err instanceof Error) {
@@ -252,7 +255,8 @@ const InventoryManagement: React.FC = () => {
     // Add null/undefined checks for book properties
     if (!book || typeof book !== 'object' || !book.id) return false;
 
-    const matchesFilter = statusFilter === 'all' ||
+    const matchesFilter =
+      statusFilter === 'all' ||
       (statusFilter === 'available' && Boolean(book.is_available)) ||
       (statusFilter === 'issued' && !Boolean(book.is_available));
     return matchesFilter;
@@ -349,7 +353,7 @@ const InventoryManagement: React.FC = () => {
       const issuePayload: IssueBookPayload = {
         book_id: parseInt(issueData.bookId),
         user_id: parseInt(issueData.userId),
-        due_date: new Date(issueData.dueDate).toISOString()
+        due_date: new Date(issueData.dueDate).toISOString(),
       };
 
       await issueBook(token, issuePayload);
@@ -404,11 +408,11 @@ const InventoryManagement: React.FC = () => {
         book_id: parseInt(returnData.bookId),
         user_id: parseInt(returnData.userId),
         condition: returnData.condition,
-        notes: returnData.notes
+        notes: returnData.notes,
       };
 
       const response = await returnBook(token, returnPayload);
-      
+
       if (response) {
         showNotification('success', 'Book returned successfully');
       }
@@ -461,7 +465,7 @@ const InventoryManagement: React.FC = () => {
       await createRack(token, {
         name: newRack.name.trim(),
         location: newRack.location?.trim(),
-        description: newRack.description.trim()
+        description: newRack.description.trim(),
       });
 
       showNotification('success', 'Rack created successfully');
@@ -513,7 +517,7 @@ const InventoryManagement: React.FC = () => {
         name: newShelf.name.trim(),
         rack_id: newShelf.rack_id,
         capacity: newShelf.capacity,
-        description: newShelf.description?.trim()
+        description: newShelf.description?.trim(),
       });
 
       showNotification('success', 'Shelf created successfully');
@@ -584,7 +588,9 @@ const InventoryManagement: React.FC = () => {
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl md:rounded-2xl p-6 md:p-8 text-white relative">
         <h1 className="text-2xl md:text-3xl font-bold mb-2">Inventory Management</h1>
-        <p className="text-purple-100 text-sm md:text-base">Issue and return books, manage library transactions</p>
+        <p className="text-purple-100 text-sm md:text-base">
+          Issue and return books, manage library transactions
+        </p>
         <button
           onClick={handleRefresh}
           disabled={isLoading}
@@ -691,7 +697,7 @@ const InventoryManagement: React.FC = () => {
               type="text"
               placeholder="Search books by title, author, or ISBN..."
               value={searchTerm}
-              onChange={(e) => {
+              onChange={e => {
                 setSearchTerm(e.target.value);
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
@@ -712,7 +718,7 @@ const InventoryManagement: React.FC = () => {
               <Filter className="w-5 h-5 text-gray-400" />
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={e => setStatusFilter(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
                 <option value="all">All Books</option>
@@ -740,73 +746,90 @@ const InventoryManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {Array.isArray(filteredBooks) ? filteredBooks.map((book) => {
-                // Defensive checks for book object and required properties
-                if (!book || typeof book !== 'object' || !book.id) return null;
+              {Array.isArray(filteredBooks)
+                ? filteredBooks
+                    .map(book => {
+                      // Defensive checks for book object and required properties
+                      if (!book || typeof book !== 'object' || !book.id) return null;
 
-                return (
-                  <tr key={book.id} className="hover:bg-gray-50">
-                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                          <Book className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{book.title || 'Unknown Title'}</div>
-                          <div className="text-sm text-gray-500">{book.author || 'Unknown Author'}</div>
-                          <div className="text-xs text-gray-400">ISBN: {book.isbn || 'N/A'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                      <div className={`flex items-center space-x-2 ${Boolean(book.is_available) ? 'text-emerald-600' : 'text-amber-600'
-                        }`}>
-                        {Boolean(book.is_available) ?
-                          <CheckCircle className="w-4 h-4" /> :
-                          <Clock className="w-4 h-4" />
-                        }
-                        <span className="text-sm font-medium">
-                          {book.is_available ? 'Available' : 'Issued'}
-                        </span>
-                      </div>
-                      {!Boolean(book.is_available) && book.return_date && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Due: {new Date(book.return_date).toLocaleDateString()}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        {Boolean(book.is_available) ? (
-                          <button
-                            onClick={() => {
-                              setIssueData(prev => ({ ...prev, bookId: book.id.toString() }));
-                              setShowIssueModal(true);
-                            }}
-                            disabled={isOperationLoading}
-                            className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
-                            title="Issue Book"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setReturnData(prev => ({ ...prev, bookId: book.id.toString() }));
-                              setShowReturnModal(true);
-                            }}
-                            disabled={isOperationLoading}
-                            className="text-emerald-600 hover:text-emerald-900 p-1 hover:bg-emerald-50 rounded disabled:opacity-50"
-                            title="Return Book"
-                          >
-                            <IterationCw className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              }).filter(Boolean) : []}
+                      return (
+                        <tr key={book.id} className="hover:bg-gray-50">
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                                <Book className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {book.title || 'Unknown Title'}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {book.author || 'Unknown Author'}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  ISBN: {book.isbn || 'N/A'}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                            <div
+                              className={`flex items-center space-x-2 ${
+                                Boolean(book.is_available) ? 'text-emerald-600' : 'text-amber-600'
+                              }`}
+                            >
+                              {Boolean(book.is_available) ? (
+                                <CheckCircle className="w-4 h-4" />
+                              ) : (
+                                <Clock className="w-4 h-4" />
+                              )}
+                              <span className="text-sm font-medium">
+                                {book.is_available ? 'Available' : 'Issued'}
+                              </span>
+                            </div>
+                            {!Boolean(book.is_available) && book.return_date && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Due: {new Date(book.return_date).toLocaleDateString()}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex space-x-2">
+                              {Boolean(book.is_available) ? (
+                                <button
+                                  onClick={() => {
+                                    setIssueData(prev => ({ ...prev, bookId: book.id.toString() }));
+                                    setShowIssueModal(true);
+                                  }}
+                                  disabled={isOperationLoading}
+                                  className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
+                                  title="Issue Book"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setReturnData(prev => ({
+                                      ...prev,
+                                      bookId: book.id.toString(),
+                                    }));
+                                    setShowReturnModal(true);
+                                  }}
+                                  disabled={isOperationLoading}
+                                  className="text-emerald-600 hover:text-emerald-900 p-1 hover:bg-emerald-50 rounded disabled:opacity-50"
+                                  title="Return Book"
+                                >
+                                  <IterationCw className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                    .filter(Boolean)
+                : []}
             </tbody>
           </table>
         </div>
@@ -814,7 +837,9 @@ const InventoryManagement: React.FC = () => {
         {filteredBooks.length === 0 && (
           <div className="text-center py-8 md:py-12">
             <Book className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 text-sm md:text-base">No books found matching your criteria.</p>
+            <p className="text-gray-500 text-sm md:text-base">
+              No books found matching your criteria.
+            </p>
           </div>
         )}
 
@@ -823,7 +848,8 @@ const InventoryManagement: React.FC = () => {
           <div className="px-4 md:px-6 py-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-700">
-                Showing {Math.min(currentPage * itemsPerPage + 1, totalBooks)} to {Math.min((currentPage + 1) * itemsPerPage, totalBooks)} of {totalBooks} books
+                Showing {Math.min(currentPage * itemsPerPage + 1, totalBooks)} to{' '}
+                {Math.min((currentPage + 1) * itemsPerPage, totalBooks)} of {totalBooks} books
               </div>
               <div className="flex space-x-2">
                 <button
@@ -842,7 +868,9 @@ const InventoryManagement: React.FC = () => {
                 </span>
                 <button
                   onClick={() => {
-                    setCurrentPage(prev => Math.min(Math.ceil(totalBooks / itemsPerPage) - 1, prev + 1));
+                    setCurrentPage(prev =>
+                      Math.min(Math.ceil(totalBooks / itemsPerPage) - 1, prev + 1)
+                    );
                     setRefreshKey(prev => prev + 1);
                   }}
                   disabled={currentPage >= Math.ceil(totalBooks / itemsPerPage) - 1 || isLoading}
@@ -863,7 +891,10 @@ const InventoryManagement: React.FC = () => {
         <div className="space-y-3">
           {recentActivity.length > 0 ? (
             recentActivity.map((activity, index) => (
-              <div key={activity.id || index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+              <div
+                key={activity.id || index}
+                className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg"
+              >
                 <div className="flex-shrink-0 mt-1">
                   {activity.type === 'issue' ? (
                     <Clock className="w-4 h-4 text-amber-600" />
@@ -876,7 +907,9 @@ const InventoryManagement: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-900">{activity.details || activity.message}</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : activity.time}
+                    {activity.timestamp
+                      ? new Date(activity.timestamp).toLocaleString()
+                      : activity.time}
                   </p>
                 </div>
               </div>
@@ -909,44 +942,54 @@ const InventoryManagement: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Book</label>
                 <select
                   value={issueData.bookId}
-                  onChange={(e) => setIssueData({ ...issueData, bookId: e.target.value })}
+                  onChange={e => setIssueData({ ...issueData, bookId: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.bookId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                 >
                   <option value="">Select a book</option>
-                  {books.filter(book => book.is_available).map((book) => (
-                    <option key={book.id} value={book.id.toString()}>
-                      {book.title} - {book.author}
-                    </option>
-                  ))}
+                  {books
+                    .filter(book => book.is_available)
+                    .map(book => (
+                      <option key={book.id} value={book.id.toString()}>
+                        {book.title} - {book.author}
+                      </option>
+                    ))}
                 </select>
-                {formErrors.bookId && <p className="mt-1 text-red-500 text-xs">{formErrors.bookId}</p>}
+                {formErrors.bookId && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.bookId}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select User</label>
                 <select
                   value={issueData.userId}
-                  onChange={(e) => setIssueData({ ...issueData, userId: e.target.value })}
+                  onChange={e => setIssueData({ ...issueData, userId: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.userId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                 >
                   <option value="">Select a user</option>
-                  {users.filter(user => user.role === 'user').map((user) => (
-                    <option key={user.id} value={user.id.toString()}>
-                      {user.name} ({user.usn})
-                    </option>
-                  ))}
+                  {users
+                    .filter(user => user.role === 'user')
+                    .map(user => (
+                      <option key={user.id} value={user.id.toString()}>
+                        {user.name} ({user.usn})
+                      </option>
+                    ))}
                 </select>
-                {formErrors.userId && <p className="mt-1 text-red-500 text-xs">{formErrors.userId}</p>}
+                {formErrors.userId && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.userId}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
                 <input
                   type="date"
                   value={issueData.dueDate}
-                  onChange={(e) => setIssueData({ ...issueData, dueDate: e.target.value })}
+                  onChange={e => setIssueData({ ...issueData, dueDate: e.target.value })}
                   min={new Date().toISOString().split('T')[0]}
                   className={`w-full px-4 py-3 border ${formErrors.dueDate ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                 />
-                {formErrors.dueDate && <p className="mt-1 text-red-500 text-xs">{formErrors.dueDate}</p>}
+                {formErrors.dueDate && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.dueDate}</p>
+                )}
               </div>
             </div>
             <div className="flex justify-end space-x-3 mt-6">
@@ -995,39 +1038,49 @@ const InventoryManagement: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Book</label>
                 <select
                   value={returnData.bookId}
-                  onChange={(e) => setReturnData({ ...returnData, bookId: e.target.value })}
+                  onChange={e => setReturnData({ ...returnData, bookId: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.bookId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
                 >
                   <option value="">Select a book</option>
-                  {books.filter(book => !book.is_available).map((book) => (
-                    <option key={book.id} value={book.id.toString()}>
-                      {book.title} - {book.author}
-                    </option>
-                  ))}
+                  {books
+                    .filter(book => !book.is_available)
+                    .map(book => (
+                      <option key={book.id} value={book.id.toString()}>
+                        {book.title} - {book.author}
+                      </option>
+                    ))}
                 </select>
-                {formErrors.bookId && <p className="mt-1 text-red-500 text-xs">{formErrors.bookId}</p>}
+                {formErrors.bookId && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.bookId}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select User</label>
                 <select
                   value={returnData.userId}
-                  onChange={(e) => setReturnData({ ...returnData, userId: e.target.value })}
+                  onChange={e => setReturnData({ ...returnData, userId: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.userId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
                 >
                   <option value="">Select a user</option>
-                  {users.filter(user => user.role === 'user').map((user) => (
-                    <option key={user.id} value={user.id.toString()}>
-                      {user.name} ({user.usn})
-                    </option>
-                  ))}
+                  {users
+                    .filter(user => user.role === 'user')
+                    .map(user => (
+                      <option key={user.id} value={user.id.toString()}>
+                        {user.name} ({user.usn})
+                      </option>
+                    ))}
                 </select>
-                {formErrors.userId && <p className="mt-1 text-red-500 text-xs">{formErrors.userId}</p>}
+                {formErrors.userId && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.userId}</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Book Condition</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Book Condition
+                </label>
                 <select
                   value={returnData.condition}
-                  onChange={(e) => setReturnData({ ...returnData, condition: e.target.value })}
+                  onChange={e => setReturnData({ ...returnData, condition: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.condition ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
                 >
                   <option value="good">Good</option>
@@ -1035,13 +1088,17 @@ const InventoryManagement: React.FC = () => {
                   <option value="damaged">Damaged</option>
                   <option value="lost">Lost</option>
                 </select>
-                {formErrors.condition && <p className="mt-1 text-red-500 text-xs">{formErrors.condition}</p>}
+                {formErrors.condition && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.condition}</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes (Optional)
+                </label>
                 <textarea
                   value={returnData.notes}
-                  onChange={(e) => setReturnData({ ...returnData, notes: e.target.value })}
+                  onChange={e => setReturnData({ ...returnData, notes: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
                   placeholder="Any additional notes about the book condition..."
@@ -1056,8 +1113,7 @@ const InventoryManagement: React.FC = () => {
                       <p className="mt-1">
                         {returnData.condition === 'damaged'
                           ? 'This book is marked as damaged. Additional fees may apply.'
-                          : 'This book is marked as lost. Replacement fees will be charged.'
-                        }
+                          : 'This book is marked as lost. Replacement fees will be charged.'}
                       </p>
                     </div>
                   </div>
@@ -1111,7 +1167,7 @@ const InventoryManagement: React.FC = () => {
                 <input
                   type="text"
                   value={newRack.name}
-                  onChange={(e) => setNewRack({ ...newRack, name: e.target.value })}
+                  onChange={e => setNewRack({ ...newRack, name: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.name ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
                   placeholder="Enter rack name"
                 />
@@ -1122,17 +1178,21 @@ const InventoryManagement: React.FC = () => {
                 <input
                   type="text"
                   value={newRack.location}
-                  onChange={(e) => setNewRack({ ...newRack, location: e.target.value })}
+                  onChange={e => setNewRack({ ...newRack, location: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.location ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
                   placeholder="Enter rack location"
                 />
-                {formErrors.location && <p className="mt-1 text-red-500 text-xs">{formErrors.location}</p>}
+                {formErrors.location && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.location}</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description (Optional)
+                </label>
                 <textarea
                   value={newRack.description}
-                  onChange={(e) => setNewRack({ ...newRack, description: e.target.value })}
+                  onChange={e => setNewRack({ ...newRack, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                   placeholder="Enter rack description"
@@ -1186,7 +1246,7 @@ const InventoryManagement: React.FC = () => {
                 <input
                   type="text"
                   value={newShelf.name}
-                  onChange={(e) => setNewShelf({ ...newShelf, name: e.target.value })}
+                  onChange={e => setNewShelf({ ...newShelf, name: e.target.value })}
                   className={`w-full px-4 py-3 border ${formErrors.name ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent`}
                   placeholder="Enter shelf name"
                 />
@@ -1196,36 +1256,44 @@ const InventoryManagement: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Rack</label>
                 <select
                   value={newShelf.rack_id}
-                  onChange={(e) => setNewShelf({ ...newShelf, rack_id: parseInt(e.target.value) })}
+                  onChange={e => setNewShelf({ ...newShelf, rack_id: parseInt(e.target.value) })}
                   className={`w-full px-4 py-3 border ${formErrors.rack_id ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent`}
                 >
                   <option value={0}>Select a rack</option>
-                  {racks.map((rack) => (
+                  {racks.map(rack => (
                     <option key={rack.id} value={rack.id}>
                       {rack.name} - {rack.location}
                     </option>
                   ))}
                 </select>
-                {formErrors.rack_id && <p className="mt-1 text-red-500 text-xs">{formErrors.rack_id}</p>}
+                {formErrors.rack_id && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.rack_id}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Capacity</label>
                 <input
                   type="number"
                   value={newShelf.capacity}
-                  onChange={(e) => setNewShelf({ ...newShelf, capacity: parseInt(e.target.value) || 0 })}
+                  onChange={e =>
+                    setNewShelf({ ...newShelf, capacity: parseInt(e.target.value) || 0 })
+                  }
                   min="1"
                   max="1000"
                   className={`w-full px-4 py-3 border ${formErrors.capacity ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent`}
                   placeholder="Enter shelf capacity"
                 />
-                {formErrors.capacity && <p className="mt-1 text-red-500 text-xs">{formErrors.capacity}</p>}
+                {formErrors.capacity && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.capacity}</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description (Optional)
+                </label>
                 <textarea
                   value={newShelf.description}
-                  onChange={(e) => setNewShelf({ ...newShelf, description: e.target.value })}
+                  onChange={e => setNewShelf({ ...newShelf, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                   placeholder="Enter shelf description"
@@ -1258,8 +1326,11 @@ const InventoryManagement: React.FC = () => {
 
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-          }`}>
+        <div
+          className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
+            notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+          }`}
+        >
           <div className="flex items-center space-x-2">
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5" />

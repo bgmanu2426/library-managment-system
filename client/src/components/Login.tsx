@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { BookOpen, User, Lock, Mail, AlertCircle, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import {
+  BookOpen,
+  User,
+  Lock,
+  Mail,
+  AlertCircle,
+  Loader2,
+  CheckCircle,
+  XCircle,
+} from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
-  const [validationErrors, setValidationErrors] = useState<{email?: string; password?: string}>({});
+  const [validationErrors, setValidationErrors] = useState<{ email?: string; password?: string }>(
+    {}
+  );
   const { login, isLoading, loginInProgress, error: authError } = useAuth();
   const [formTouched, setFormTouched] = useState(false);
   const [loginAttempted, setLoginAttempted] = useState(false);
@@ -22,7 +33,7 @@ const Login: React.FC = () => {
   }, [email, password, loginAttempted]);
 
   const validateForm = () => {
-    const errors: {email?: string; password?: string} = {};
+    const errors: { email?: string; password?: string } = {};
     let isValid = true;
 
     // Email validation
@@ -51,11 +62,11 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoginAttempted(true);
     setLocalError('');
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       const success = await login(email, password);
       if (!success) {
@@ -96,7 +107,7 @@ const Login: React.FC = () => {
     if (validationErrors[field]) {
       setValidationErrors(prev => ({
         ...prev,
-        [field]: undefined
+        [field]: undefined,
       }));
     }
   };
@@ -118,15 +129,13 @@ const Login: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 w-4 h-4 md:w-5 md:h-5 text-gray-400" />
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  onChange={e => handleInputChange('email', e.target.value)}
                   className={`w-full pl-9 md:pl-10 pr-4 py-2.5 md:py-3 border ${
                     validationErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'
                   } rounded-lg md:rounded-xl focus:ring-2 ${
@@ -146,15 +155,13 @@ const Login: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 w-4 h-4 md:w-5 md:h-5 text-gray-400" />
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  onChange={e => handleInputChange('password', e.target.value)}
                   className={`w-full pl-9 md:pl-10 pr-4 py-2.5 md:py-3 border ${
                     validationErrors.password ? 'border-red-500 bg-red-50' : 'border-gray-300'
                   } rounded-lg md:rounded-xl focus:ring-2 ${
@@ -184,8 +191,8 @@ const Login: React.FC = () => {
               type="submit"
               disabled={isSubmitDisabled}
               className={`w-full flex justify-center items-center space-x-2 py-2.5 md:py-3 px-4 rounded-lg md:rounded-xl font-medium transition-all duration-200 text-sm md:text-base ${
-                isSubmitDisabled 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                isSubmitDisabled
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-emerald-600 text-white hover:from-blue-700 hover:to-emerald-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
               }`}
             >
