@@ -398,7 +398,6 @@ async def get_fines(
            summary="Calculate fines for overdue books",
            description="Calculates and creates fine records for all overdue books")
 async def calculate_fines(
-    params: CalculateFinesPayload,
     session: Session = Depends(get_session),
     current_admin: User = Depends(get_current_admin)
 ):
@@ -408,19 +407,19 @@ async def calculate_fines(
     
     # Log admin action and business parameters
     api_logger.info(f"[{correlation_id}] Admin {current_admin.name} (ID: {current_admin.id}) initiating fine calculation")
-    logging_config.log_api_operation(f"Fine calculation initiated with rate: ₹{params.fine_per_day} per day", correlation_id=correlation_id)
+    logging_config.log_api_operation(f"Fine calculation initiated with rate: ₹{FINE_PER_DAY} per day", correlation_id=correlation_id)
     
     try:
-        fine_per_day = params.fine_per_day
-        if fine_per_day <= 0:
-            api_logger.warning(f"[{correlation_id}] Invalid fine per day rate: {fine_per_day}")
+        fine_per_day = FINE_PER_DAY
+        if FINE_PER_DAY <= 0:
+            api_logger.warning(f"[{correlation_id}] Invalid fine per day rate: {FINE_PER_DAY}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Fine per day must be greater than 0"
             )
             
         # Log business logic decision
-        api_logger.info(f"[{correlation_id}] Fine calculation algorithm: ₹{fine_per_day} per day overdue")
+        api_logger.info(f"[{correlation_id}] Fine calculation algorithm: ₹{FINE_PER_DAY} per day overdue")
         current_time = datetime.utcnow()
         logging_config.log_api_operation(f"Fine calculation timestamp: {current_time}", correlation_id=correlation_id)
         
@@ -470,9 +469,9 @@ async def calculate_fines(
                 
                 # Calculate days overdue and fine amount with algorithm logging
                 days_overdue = max(0, (current_time - transaction.due_date).days)
-                fine_amount = days_overdue * fine_per_day
+                fine_amount = days_overdue * FINE_PER_DAY
                 
-                logging_config.log_api_operation(f"Fine calculation for transaction {transaction.id}: {days_overdue} days × ₹{fine_per_day} = ₹{fine_amount}", correlation_id=correlation_id)
+                logging_config.log_api_operation(f"Fine calculation for transaction {transaction.id}: {days_overdue} days × ₹{FINE_PER_DAY} = ₹{fine_amount}", correlation_id=correlation_id)
                 
                 if days_overdue <= 0:
                     logging_config.log_api_operation(f"Transaction {transaction.id} is not overdue ({days_overdue} days), skipping", correlation_id=correlation_id)
@@ -501,7 +500,7 @@ async def calculate_fines(
                     book_isbn=transaction.book_isbn or "N/A",
                     days_overdue=days_overdue,
                     fine_amount=fine_amount,
-                    fine_per_day=fine_per_day,
+                    fine_per_day=FINE_PER_DAY,
                     issued_date=transaction.issued_date,
                     due_date=transaction.due_date,
                     return_date=transaction.return_date,

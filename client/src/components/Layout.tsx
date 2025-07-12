@@ -12,8 +12,6 @@ import {
   X,
   History,
   AlertTriangle,
-  Layers,
-  Grid,
   Loader2,
   Bell
 } from 'lucide-react';

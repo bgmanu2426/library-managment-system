@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Package,
   Plus,
   Search,
   Filter,
-  Edit3,
-  Trash2,
   Clock,
   CheckCircle,
   AlertTriangle,
@@ -15,7 +12,6 @@ import {
   Loader,
   Book,
   User,
-  Calendar,
   ArrowLeft,
   ArrowRight,
   Building,
@@ -36,7 +32,6 @@ import {
 import {
   Book as BookType,
   User as UserType,
-  Transaction,
   IssueBookPayload,
   ReturnBookPayload,
   Rack,
@@ -47,13 +42,10 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 const InventoryManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'issue' | 'return' | 'transactions'>('issue');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
-  const [selectedBook, setSelectedBook] = useState<BookType | null>(null);
-  const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
 
   // Issue form data
   const [issueData, setIssueData] = useState({
@@ -73,13 +65,12 @@ const InventoryManagement: React.FC = () => {
   const { user } = useAuth();
   const [books, setBooks] = useState<BookType[]>([]);
   const [users, setUsers] = useState<UserType[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalBooks, setTotalBooks] = useState(0);
@@ -260,15 +251,15 @@ const InventoryManagement: React.FC = () => {
   const filteredBooks = (searchTerm ? searchResults : books).filter(book => {
     // Add null/undefined checks for book properties
     if (!book || typeof book !== 'object' || !book.id) return false;
-    
+
     const matchesFilter = statusFilter === 'all' ||
-                         (statusFilter === 'available' && Boolean(book.is_available)) ||
-                         (statusFilter === 'issued' && !Boolean(book.is_available));
+      (statusFilter === 'available' && Boolean(book.is_available)) ||
+      (statusFilter === 'issued' && !Boolean(book.is_available));
     return matchesFilter;
   });
 
-  const validateIssueForm = (): {[key: string]: string} => {
-    const errors: {[key: string]: string} = {};
+  const validateIssueForm = (): { [key: string]: string } => {
+    const errors: { [key: string]: string } = {};
 
     if (!issueData.bookId) errors.bookId = 'Book selection is required';
     if (!issueData.userId) errors.userId = 'User selection is required';
@@ -282,8 +273,8 @@ const InventoryManagement: React.FC = () => {
     return errors;
   };
 
-  const validateReturnForm = (): {[key: string]: string} => {
-    const errors: {[key: string]: string} = {};
+  const validateReturnForm = (): { [key: string]: string } => {
+    const errors: { [key: string]: string } = {};
 
     if (!returnData.bookId) errors.bookId = 'Book selection is required';
     if (!returnData.userId) errors.userId = 'User selection is required';
@@ -297,8 +288,8 @@ const InventoryManagement: React.FC = () => {
     return errors;
   };
 
-  const validateRackForm = (): {[key: string]: string} => {
-    const errors: {[key: string]: string} = {};
+  const validateRackForm = (): { [key: string]: string } => {
+    const errors: { [key: string]: string } = {};
 
     if (!newRack.name?.trim()) {
       errors.name = 'Rack name is required';
@@ -315,8 +306,8 @@ const InventoryManagement: React.FC = () => {
     return errors;
   };
 
-  const validateShelfForm = (): {[key: string]: string} => {
-    const errors: {[key: string]: string} = {};
+  const validateShelfForm = (): { [key: string]: string } => {
+    const errors: { [key: string]: string } = {};
 
     if (!newShelf.name?.trim()) {
       errors.name = 'Shelf name is required';
@@ -417,14 +408,11 @@ const InventoryManagement: React.FC = () => {
       };
 
       const response = await returnBook(token, returnPayload);
-      showNotification('success', 'Book returned successfully');
-
-      // Show fine information if applicable
-      if (response && typeof response === 'object' && 'fine_amount' in response && response.fine_amount && response.fine_amount > 0) {
-        showNotification('error', `Fine of ₹${response.fine_amount} applied for ${response.days_overdue} overdue days`);
+      
+      if (response) {
+        showNotification('success', 'Book returned successfully');
       }
 
-      setReturnData({ bookId: '', userId: '', condition: 'good', notes: '' });
       setFormErrors({});
       setShowReturnModal(false);
       handleRefresh();
@@ -472,7 +460,7 @@ const InventoryManagement: React.FC = () => {
 
       await createRack(token, {
         name: newRack.name.trim(),
-        location: newRack.location.trim(),
+        location: newRack.location?.trim(),
         description: newRack.description.trim()
       });
 
@@ -525,7 +513,7 @@ const InventoryManagement: React.FC = () => {
         name: newShelf.name.trim(),
         rack_id: newShelf.rack_id,
         capacity: newShelf.capacity,
-        description: newShelf.description.trim()
+        description: newShelf.description?.trim()
       });
 
       showNotification('success', 'Shelf created successfully');
@@ -755,7 +743,7 @@ const InventoryManagement: React.FC = () => {
               {Array.isArray(filteredBooks) ? filteredBooks.map((book) => {
                 // Defensive checks for book object and required properties
                 if (!book || typeof book !== 'object' || !book.id) return null;
-                
+
                 return (
                   <tr key={book.id} className="hover:bg-gray-50">
                     <td className="px-4 md:px-6 py-4 whitespace-nowrap">
@@ -771,9 +759,8 @@ const InventoryManagement: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 md:px-6 py-4 whitespace-nowrap">
-                      <div className={`flex items-center space-x-2 ${
-                        Boolean(book.is_available) ? 'text-emerald-600' : 'text-amber-600'
-                      }`}>
+                      <div className={`flex items-center space-x-2 ${Boolean(book.is_available) ? 'text-emerald-600' : 'text-amber-600'
+                        }`}>
                         {Boolean(book.is_available) ?
                           <CheckCircle className="w-4 h-4" /> :
                           <Clock className="w-4 h-4" />
@@ -1271,9 +1258,8 @@ const InventoryManagement: React.FC = () => {
 
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
-          notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
+        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+          }`}>
           <div className="flex items-center space-x-2">
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5" />

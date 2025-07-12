@@ -2,7 +2,6 @@ import {
   User,
   Book,
   Transaction,
-  Fine,
   Rack,
   Shelf,
   LoginResponse,
@@ -733,7 +732,6 @@ export const returnBook = async (token: string, returnData: ReturnBookPayload): 
   return_date?: string;
   fine_amount?: number; 
   days_overdue?: number;
-  warning?: string;
 }> => {
   try {
     validateAuthToken(token);
@@ -758,7 +756,6 @@ export const returnBook = async (token: string, returnData: ReturnBookPayload): 
       return_date?: string;
       fine_amount?: number; 
       days_overdue?: number;
-      warning?: string;
     }>(
       getApiUrl(API_ENDPOINTS.RETURN_BOOK),
       {
@@ -783,7 +780,6 @@ export const returnBook = async (token: string, returnData: ReturnBookPayload): 
       return_date: response.return_date,
       fine_amount: typeof response.fine_amount === 'number' ? response.fine_amount : undefined,
       days_overdue: typeof response.days_overdue === 'number' ? response.days_overdue : undefined,
-      warning: response.warning
     };
     
   } catch (error) {
@@ -1224,7 +1220,7 @@ export const payFine = async (token: string, fineId: number, paymentData: PayFin
     }
     
     // Validate payment method
-    const validPaymentMethods = ['cash', 'card', 'online', 'upi'];
+    const validPaymentMethods = ['cash', 'card', 'upi'];
     if (paymentData.payment_method && !validPaymentMethods.includes(paymentData.payment_method.toLowerCase())) {
       throw new Error(`Invalid payment method. Must be one of: ${validPaymentMethods.join(', ')}`);
     }

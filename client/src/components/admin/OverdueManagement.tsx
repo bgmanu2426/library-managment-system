@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   AlertTriangle, 
-  DollarSign, 
+  IndianRupee, 
   Search, 
   Filter,
-  Calendar,
-  User,
   BookOpen,
   CheckCircle,
   X,
@@ -13,7 +11,6 @@ import {
   CreditCard,
   UserX,
   Clock,
-  TrendingUp,
   FileText,
   RefreshCw,
   Loader,
@@ -362,12 +359,13 @@ const OverdueManagement: React.FC = () => {
   };
 
   const handleCalculateFines = async () => {
+    const FINE_PER_DAY = 5;
     if (!user) {
       showNotification('error', 'Authentication required');
       return;
     }
 
-    if (finePerDay <= 0) {
+    if (FINE_PER_DAY <= 0) {
       showNotification('error', 'Fine per day must be greater than 0');
       return;
     }
@@ -380,7 +378,7 @@ const OverdueManagement: React.FC = () => {
       }
 
       const calculateData: CalculateFinesPayload = {
-        fine_per_day: finePerDay
+        fine_per_day: FINE_PER_DAY
       };
 
       const response = await calculateFines(token, calculateData);
@@ -489,7 +487,7 @@ const OverdueManagement: React.FC = () => {
         <p className="text-red-100">Manage overdue books, track fines, and process payments</p>
         <div className="absolute top-4 right-4 flex space-x-2">
           <button
-            onClick={() => setShowCalculateModal(true)}
+            onClick={handleCalculateFines}
             disabled={isLoading || isOperationLoading}
             className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50"
             title="Calculate Fines"
@@ -543,7 +541,7 @@ const OverdueManagement: React.FC = () => {
               <p className="text-sm text-emerald-800 mt-1">{stats.paidFines} payments</p>
             </div>
             <div className="p-3 bg-emerald-100 rounded-lg">
-              <DollarSign className="w-8 h-8 text-emerald-600" />
+              <IndianRupee className="w-8 h-8 text-emerald-600" />
             </div>
           </div>
         </div>
@@ -968,7 +966,6 @@ const OverdueManagement: React.FC = () => {
               >
                 <option value="cash">Cash</option>
                 <option value="card">Card</option>
-                <option value="online">Online</option>
                 <option value="upi">UPI</option>
               </select>
             </div>
