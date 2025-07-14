@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import Union, List, Dict, Any
 from starlette.middleware.base import BaseHTTPMiddleware
+from datetime import datetime
 
 from database import create_db_and_tables
 from models import User, Book, Rack, Shelf, Transaction, Fine
@@ -76,7 +77,7 @@ def get_allowed_origins() -> List[str]:
             # Generic pattern for numbered format subdomains
             f"https://[0-9]+-*-web.{clacky_pattern}",
             f"http://[0-9]+-*-web.{clacky_pattern}",
-            # Add support for any port in development
+            # Add any port in development
             "http://0.0.0.0:*",
             "http://127.0.0.1:*"
         ]
@@ -131,6 +132,24 @@ def get_clacky_origin_regex() -> str:
     api_logger.info(f"Using CORS regex pattern: {combined_pattern}")
     
     return combined_pattern
+
+# Enhanced CORS configuration for report endpoints
+def get_report_cors_origins() -> List[str]:
+    """Get CORS origins specifically configured for report endpoints."""
+    # Get base origins
+    base_origins = get_allowed_origins()
+    
+    # Add additional origins specifically for reports if needed
+    report_origins = base_origins.copy()
+    
+    # Add any report-specific origins from environment
+    report_specific_origins = os.getenv("REPORT_ALLOWED_ORIGINS", "")
+    if report_specific_origins:
+        additional_origins = [origin.strip() for origin in report_specific_origins.split(",")]
+        report_origins.extend(additional_origins)
+        api_logger.info(f"Added report-specific CORS origins: {additional_origins}")
+    
+    return report_origins
 
 # Custom CORS middleware to handle wildcard subdomains and dynamic origins
 class CustomCORSMiddleware(BaseHTTPMiddleware):
@@ -202,6 +221,59 @@ app.add_middleware(
 
 # Add custom CORS middleware to handle dynamic origins
 app.add_middleware(CustomCORSMiddleware)
+
+# Specific request logging for report endpoints
+@app.middleware("http")
+async def log_report_requests(request: Request, call_next):
+    # Only log report-specific details for report endpoints
+    if not request.url.path.startswith("/api/reports/"):
+        return await call_next(request)
+    
+    start_time = time.time()
+    correlation_id = logging_config.get_correlation_id()
+    
+    # Detailed logging for report requests
+    api_logger.info(f"[{correlation_id}] Report request: {request.method} {request.url.path}")
+    
+    # Log query parameters for debugging URL construction
+    if request.query_params:
+        query_params = dict(request.query_params)
+        logging_config.log_api_operation(f"Report query parameters: {json.dumps(query_params)}", correlation_id=correlation_id)
+        
+        # Check for potentially problematic parameters
+        for param, value in query_params.items():
+            if not value or value in ['undefined', 'null', '{}']:
+                api_logger.warning(f"[{correlation_id}] Potentially invalid parameter: {param}={value}")
+            elif '{' in str(value) or '}' in str(value):
+                api_logger.warning(f"[{correlation_id}] Parameter contains template syntax: {param}={value}")
+    
+    # Log authentication for report requests
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token_preview = auth_header[7:17] + "..." if len(auth_header) > 17 else auth_header[7:]
+        logging_config.log_api_operation(f"Report request authenticated with token: {token_preview}", correlation_id=correlation_id)
+    else:
+        api_logger.warning(f"[{correlation_id}] Report request without proper authentication")
+    
+    # Process request
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        
+        # Log response details for reports
+        api_logger.info(f"[{correlation_id}] Report response: {response.status_code} in {process_time:.3f}s")
+        
+        if response.status_code >= 400:
+            logging_config.log_error(api_logger, f"Report request failed: {request.method} {request.url.path} - {response.status_code}", correlation_id=correlation_id)
+        else:
+            logging_config.log_api_operation(f"Report request successful: {request.method} {request.url.path}", correlation_id=correlation_id)
+        
+        return response
+        
+    except Exception as e:
+        process_time = time.time() - start_time
+        logging_config.log_error(api_logger, f"Report request exception: {str(e)} after {process_time:.3f}s", correlation_id=correlation_id)
+        raise
 
 # Enhanced request logging middleware with authentication debugging
 @app.middleware("http")
@@ -302,6 +374,192 @@ async def log_requests(request: Request, call_next):
             content=error_response
         )
 
+# Request validation middleware for report endpoints
+@app.middleware("http")
+async def validate_request_parameters(request: Request, call_next):
+    correlation_id = logging_config.get_correlation_id()
+    
+    # Skip validation for non-report endpoints
+    if not request.url.path.startswith("/api/reports/"):
+        return await call_next(request)
+    
+    try:
+        # Validate and sanitize query parameters for report endpoints
+        if request.query_params:
+            query_params = dict(request.query_params)
+            
+            # Validate date parameters
+            for date_param in ["start_date", "end_date"]:
+                if date_param in query_params:
+                    date_value = query_params[date_param]
+                    if date_value:
+                        try:
+                            # Parse and validate date format
+                            parsed_date = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+                            if parsed_date > datetime.utcnow():
+                                logging_config.log_error(api_logger, f"Future date provided for {date_param}: {date_value}", correlation_id=correlation_id)
+                                return JSONResponse(
+                                    status_code=status.HTTP_400_BAD_REQUEST,
+                                    content={
+                                        "status": "error",
+                                        "detail": f"{date_param} cannot be in the future",
+                                        "type": "ValidationError",
+                                        "field": date_param
+                                    }
+                                )
+                        except ValueError as e:
+                            logging_config.log_error(api_logger, f"Invalid date format for {date_param}: {date_value}", correlation_id=correlation_id)
+                            return JSONResponse(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                content={
+                                    "status": "error",
+                                    "detail": f"Invalid {date_param} format. Expected ISO 8601 format.",
+                                    "type": "ValidationError",
+                                    "field": date_param
+                                }
+                            )
+            
+            # Validate numeric parameters
+            if "user_id" in query_params and query_params["user_id"]:
+                try:
+                    user_id = int(query_params["user_id"])
+                    if user_id <= 0:
+                        return JSONResponse(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            content={
+                                "status": "error",
+                                "detail": "User ID must be a positive integer",
+                                "type": "ValidationError",
+                                "field": "user_id"
+                            }
+                        )
+                except ValueError:
+                    return JSONResponse(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        content={
+                            "status": "error",
+                            "detail": "User ID must be a valid integer",
+                            "type": "ValidationError",
+                            "field": "user_id"
+                        }
+                    )
+            
+            # Validate genre parameter
+            if "genre" in query_params and query_params["genre"]:
+                genre = query_params["genre"].strip()
+                if len(genre) > 100:
+                    return JSONResponse(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        content={
+                            "status": "error",
+                            "detail": "Genre name too long (maximum 100 characters)",
+                            "type": "ValidationError",
+                            "field": "genre"
+                        }
+                    )
+                elif not re.match(r'^[a-zA-Z0-9\s\-&.()]+$', genre):
+                    return JSONResponse(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        content={
+                            "status": "error",
+                            "detail": "Genre contains invalid characters",
+                            "type": "ValidationError",
+                            "field": "genre"
+                        }
+                    )
+        
+        logging_config.log_api_operation(f"Request parameter validation passed for {request.url.path}", correlation_id=correlation_id)
+        
+    except Exception as e:
+        logging_config.log_error(api_logger, f"Request parameter validation error: {str(e)}", correlation_id=correlation_id)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": "error",
+                "detail": "Request validation failed",
+                "type": "ValidationError"
+            }
+        )
+    
+    return await call_next(request)
+
+# Enhanced error handling middleware for report endpoints
+@app.middleware("http")
+async def enhanced_error_handling(request: Request, call_next):
+    correlation_id = logging_config.get_correlation_id()
+    
+    try:
+        response = await call_next(request)
+        
+        # Enhanced logging for report endpoint errors
+        if request.url.path.startswith("/api/reports/"):
+            if response.status_code == 400:
+                logging_config.log_error(api_logger, f"Bad Request (400) for report endpoint: {request.url.path}", correlation_id=correlation_id)
+            elif response.status_code == 405:
+                logging_config.log_error(api_logger, f"Method Not Allowed (405) for report endpoint: {request.url.path} - Method: {request.method}", correlation_id=correlation_id)
+            elif response.status_code >= 500:
+                logging_config.log_error(api_logger, f"Server Error ({response.status_code}) for report endpoint: {request.url.path}", correlation_id=correlation_id)
+        
+        return response
+        
+    except HTTPException as http_exc:
+        # Handle specific HTTP exceptions with structured responses
+        if request.url.path.startswith("/api/reports/"):
+            logging_config.log_error(api_logger, f"HTTP Exception in report endpoint {request.url.path}: {http_exc.status_code} - {http_exc.detail}", correlation_id=correlation_id)
+            
+            if http_exc.status_code == 400:
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={
+                        "status": "error",
+                        "detail": http_exc.detail or "Invalid request parameters for report generation",
+                        "type": "BadRequestError",
+                        "suggestions": [
+                            "Check your date range format (ISO 8601)",
+                            "Ensure date range does not exceed 1 year",
+                            "Verify filter parameters are valid"
+                        ]
+                    }
+                )
+            elif http_exc.status_code == 405:
+                return JSONResponse(
+                    status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+                    content={
+                        "status": "error",
+                        "detail": http_exc.detail or f"Method {request.method} not allowed for this report endpoint",
+                        "type": "MethodNotAllowedError",
+                        "allowed_methods": ["GET", "OPTIONS"],
+                        "suggestions": [
+                            "Use GET method for report generation",
+                            "Check if the endpoint URL is correct"
+                        ]
+                    }
+                )
+        
+        # Re-raise for non-report endpoints
+        raise http_exc
+        
+    except Exception as e:
+        # Handle unexpected errors with structured responses for report endpoints
+        if request.url.path.startswith("/api/reports/"):
+            logging_config.log_error(api_logger, f"Unexpected error in report endpoint {request.url.path}: {str(e)}", correlation_id=correlation_id)
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "status": "error",
+                    "detail": "An unexpected error occurred during report generation",
+                    "type": "InternalServerError",
+                    "suggestions": [
+                        "Try again with a smaller date range",
+                        "Verify your authentication token",
+                        "Contact support if the issue persists"
+                    ]
+                }
+            )
+        
+        # Re-raise for non-report endpoints
+        raise e
+
 # Special handler for OPTIONS requests (CORS preflight)
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
@@ -378,7 +636,76 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(user.router, prefix="/api/user", tags=["User"])
 app.include_router(overdue.router, prefix="/api/overdue", tags=["Overdue"])
-app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+app.include_router(
+    reports.router, 
+    prefix="/api/reports", 
+    tags=["Reports", "Analytics", "Export"],
+    dependencies=[],  # Could add global dependencies if needed
+    responses={
+        400: {
+            "description": "Bad Request - Invalid parameters",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error",
+                        "detail": "Invalid date range or parameters",
+                        "type": "ValidationError",
+                        "suggestions": ["Check date format", "Verify parameter values"]
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Unauthorized - Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error",
+                        "detail": "Authentication required for report access",
+                        "type": "AuthenticationError"
+                    }
+                }
+            }
+        },
+        403: {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error", 
+                        "detail": "Administrator privileges required",
+                        "type": "AuthorizationError"
+                    }
+                }
+            }
+        },
+        405: {
+            "description": "Method Not Allowed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error",
+                        "detail": "Method not allowed for this endpoint",
+                        "type": "MethodNotAllowedError",
+                        "allowed_methods": ["GET", "OPTIONS"]
+                    }
+                }
+            }
+        },
+        500: {
+            "description": "Internal Server Error",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "error",
+                        "detail": "Internal server error during report generation",
+                        "type": "InternalServerError"
+                    }
+                }
+            }
+        }
+    }
+)
 
 # Health check endpoint
 @app.get("/", tags=["Health"])

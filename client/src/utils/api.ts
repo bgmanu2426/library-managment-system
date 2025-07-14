@@ -118,6 +118,25 @@ export const validateApiUrl = (url: string): void => {
   }
 };
 
+export const validateReportUrl = (url: string, reportType: string): void => {
+  validateApiUrl(url);
+  
+  // Additional validation for report endpoints
+  if (!url.includes('/api/reports/')) {
+    throw new Error(`Invalid report endpoint for ${reportType}`);
+  }
+  
+  // Check for double-encoded parameters
+  if (url.includes('%25') || url.includes('%3D%3D')) {
+    throw new Error(`Malformed URL with double encoding detected: ${url}`);
+  }
+  
+  // Check for incomplete parameter substitution
+  if (url.includes('{') || url.includes('}')) {
+    throw new Error(`URL template not properly resolved: ${url}`);
+  }
+};
+
 export const createAuthenticatedRequest = (token: string, isFormData = false) => {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
@@ -256,6 +275,59 @@ const apiRequest = async <T>(
     }
     throw new Error('An unexpected error occurred - please try again');
   }
+};
+
+// Enhanced API request wrapper specifically for reports with retry logic
+const apiRequestWithRetry = async <T>(
+  url: string,
+  options: RequestInit = {},
+  operationName = 'API Request'
+): Promise<T> => {
+  const maxRetries = 3;
+  const baseDelay = 1000; // 1 second
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Validate URL before each attempt
+      validateApiUrl(url);
+      
+      const response = await apiRequest<T>(url, options, 1, 40000); // Single retry in apiRequest, 40s timeout
+      return response;
+    } catch (error) {
+      console.warn(`${operationName} attempt ${attempt}/${maxRetries} failed:`, error);
+      
+      if (error instanceof Error) {
+        // Don't retry authentication or permission errors
+        if (error.message.includes('401') || error.message.includes('403') || 
+            error.message.includes('Authentication') || error.message.includes('Access denied')) {
+          throw error;
+        }
+        
+        // Don't retry client errors (400, 405) on final attempt
+        if (attempt === maxRetries && (error.message.includes('400') || error.message.includes('405'))) {
+          throw error;
+        }
+        
+        // Retry on network errors, timeouts, and server errors
+        if (error.message.includes('Network') || error.message.includes('timeout') || 
+            error.message.includes('500') || error.message.includes('502') || 
+            error.message.includes('503') || error.message.includes('504')) {
+          
+          if (attempt < maxRetries) {
+            const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+            console.log(`Retrying ${operationName} in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+      }
+      
+      // Re-throw error if we've exhausted retries or shouldn't retry
+      throw error;
+    }
+  }
+  
+  throw new Error(`${operationName} failed after ${maxRetries} attempts`);
 };
 
 // Helper functions for response validation
@@ -1707,50 +1779,140 @@ export const clearBookFineStatusCache = (bookId?: number): void => {
 };
 
 // Reports Functions
-export const getUserActivityReport = (
+export const getUserActivityReport = async (
   token: string,
   startDate?: string,
   endDate?: string,
   userId?: number
 ): Promise<{ user_activity_report: UserActivityReport[] }> => {
-  let url = API_ENDPOINTS.USER_ACTIVITY_REPORT;
-  const params = new URLSearchParams();
+  try {
+    validateAuthToken(token);
 
-  if (startDate) params.append('start_date', startDate);
-  if (endDate) params.append('end_date', endDate);
-  if (userId) params.append('user_id', userId.toString());
+    // Validate URL construction parameters
+    let url = API_ENDPOINTS.USER_ACTIVITY_REPORT;
+    const params = new URLSearchParams();
 
-  if (params.toString()) {
-    url += `?${params.toString()}`;
+    // Add proper URL encoding for date parameters
+    if (startDate) {
+      if (!isValidDate(startDate)) {
+        throw new Error('Invalid start date format. Please use a valid date.');
+      }
+      params.append('start_date', encodeURIComponent(startDate));
+    }
+    if (endDate) {
+      if (!isValidDate(endDate)) {
+        throw new Error('Invalid end date format. Please use a valid date.');
+      }
+      params.append('end_date', encodeURIComponent(endDate));
+    }
+    if (userId && typeof userId === 'number' && userId > 0) {
+      params.append('user_id', encodeURIComponent(userId.toString()));
+    }
+
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    // Validate constructed URL
+    const fullUrl = getApiUrl(url);
+    validateApiUrl(fullUrl);
+
+    return await apiRequestWithRetry<{ user_activity_report: UserActivityReport[] }>(
+      fullUrl,
+      createAuthenticatedRequest(token),
+      'getUserActivityReport'
+    );
+  } catch (error) {
+    console.error('Error fetching user activity report:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('400') || error.message.includes('Bad Request')) {
+        throw new Error('Invalid report parameters. Please check your date range and user selection.');
+      } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
+        throw new Error('Report generation method not supported. Please try refreshing the page.');
+      } else if (error.message.includes('401') || error.message.includes('Authentication')) {
+        throw new Error('Authentication expired. Please log in again to access reports.');
+      } else if (error.message.includes('403')) {
+        throw new Error('Access denied. You do not have permission to generate reports.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('Report generation timed out. Please try again or reduce the date range.');
+      } else if (error.message.includes('Network')) {
+        throw new Error('Network error while generating report. Please check your connection.');
+      } else if (error.message.includes('Malformed URL')) {
+        throw new Error('Invalid report request. Please refresh the page and try again.');
+      }
+    }
+
+    throw error;
   }
-
-  return apiRequest<{ user_activity_report: UserActivityReport[] }>(
-    getApiUrl(url),
-    createAuthenticatedRequest(token)
-  );
 };
 
-export const getBookCirculationReport = (
+export const getBookCirculationReport = async (
   token: string,
   startDate?: string,
   endDate?: string,
   genre?: string
 ): Promise<{ book_circulation_report: BookCirculationReport[] }> => {
-  let url = API_ENDPOINTS.BOOK_CIRCULATION_REPORT;
-  const params = new URLSearchParams();
+  try {
+    validateAuthToken(token);
 
-  if (startDate) params.append('start_date', startDate);
-  if (endDate) params.append('end_date', endDate);
-  if (genre) params.append('genre', genre);
+    // Validate URL construction parameters
+    let url = API_ENDPOINTS.BOOK_CIRCULATION_REPORT;
+    const params = new URLSearchParams();
 
-  if (params.toString()) {
-    url += `?${params.toString()}`;
+    // Add proper URL encoding for parameters
+    if (startDate) {
+      if (!isValidDate(startDate)) {
+        throw new Error('Invalid start date format. Please use a valid date.');
+      }
+      params.append('start_date', encodeURIComponent(startDate));
+    }
+    if (endDate) {
+      if (!isValidDate(endDate)) {
+        throw new Error('Invalid end date format. Please use a valid date.');
+      }
+      params.append('end_date', encodeURIComponent(endDate));
+    }
+    if (genre && typeof genre === 'string' && genre.trim()) {
+      params.append('genre', encodeURIComponent(genre.trim()));
+    }
+
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    // Validate constructed URL
+    const fullUrl = getApiUrl(url);
+    validateApiUrl(fullUrl);
+
+    return await apiRequestWithRetry<{ book_circulation_report: BookCirculationReport[] }>(
+      fullUrl,
+      createAuthenticatedRequest(token),
+      'getBookCirculationReport'
+    );
+  } catch (error) {
+    console.error('Error fetching book circulation report:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('400') || error.message.includes('Bad Request')) {
+        throw new Error('Invalid report parameters. Please check your date range and genre selection.');
+      } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
+        throw new Error('Report generation method not supported. Please try refreshing the page.');
+      } else if (error.message.includes('401') || error.message.includes('Authentication')) {
+        throw new Error('Authentication expired. Please log in again to access reports.');
+      } else if (error.message.includes('403')) {
+        throw new Error('Access denied. You do not have permission to generate reports.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('Report generation timed out. Please try again or reduce the date range.');
+      } else if (error.message.includes('Network')) {
+        throw new Error('Network error while generating report. Please check your connection.');
+      } else if (error.message.includes('Malformed URL')) {
+        throw new Error('Invalid report request. Please refresh the page and try again.');
+      }
+    }
+
+    throw error;
   }
-
-  return apiRequest<{ book_circulation_report: BookCirculationReport[] }>(
-    getApiUrl(url),
-    createAuthenticatedRequest(token)
-  );
 };
 
 export const getOverdueSummaryReport = async (
@@ -1763,47 +1925,64 @@ export const getOverdueSummaryReport = async (
 
     // Validate date parameters
     if (startDate && !isValidDate(startDate)) {
-      throw new Error('Invalid start date format');
+      throw new Error('Invalid start date format. Please use a valid date.');
     }
 
     if (endDate && !isValidDate(endDate)) {
-      throw new Error('Invalid end date format');
+      throw new Error('Invalid end date format. Please use a valid date.');
     }
 
     if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
       throw new Error('Start date must be before end date');
     }
 
+    // Validate URL construction parameters
     let url = API_ENDPOINTS.OVERDUE_SUMMARY_REPORT;
     const params = new URLSearchParams();
 
-    if (startDate) params.append('start_date', startDate);
-    if (endDate) params.append('end_date', endDate);
+    // Add proper URL encoding for date parameters
+    if (startDate) {
+      params.append('start_date', encodeURIComponent(startDate));
+    }
+    if (endDate) {
+      params.append('end_date', encodeURIComponent(endDate));
+    }
 
     if (params.toString()) {
       url += `?${params.toString()}`;
     }
 
+    // Validate constructed URL
+    const fullUrl = getApiUrl(url);
+    validateApiUrl(fullUrl);
+
     const cacheKey = `overdue_summary_${startDate || 'all'}_${endDate || 'all'}_${token.slice(-10)}`;
 
     return await overdueApiRequest(cacheKey, () =>
-      apiRequest<{ overdue_summary: OverdueSummaryReport }>(
-        getApiUrl(url),
+      apiRequestWithRetry<{ overdue_summary: OverdueSummaryReport }>(
+        fullUrl,
         createAuthenticatedRequest(token),
-        3, // retries
-        30000 // 30 second timeout for reports
+        'getOverdueSummaryReport'
       )
     );
   } catch (error) {
     console.error('Error fetching overdue summary report:', error);
 
     if (error instanceof Error) {
-      if (error.message.includes('timeout')) {
+      if (error.message.includes('400') || error.message.includes('Bad Request')) {
+        throw new Error('Invalid report parameters. Please check your date range selection.');
+      } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
+        throw new Error('Report generation method not supported. Please try refreshing the page.');
+      } else if (error.message.includes('timeout')) {
         throw new Error('Report generation timed out. Please try again or reduce the date range.');
       } else if (error.message.includes('Authentication')) {
         throw new Error('Authentication failed. Please log in again to access reports.');
       } else if (error.message.includes('403')) {
         throw new Error('Access denied. You do not have permission to generate reports.');
+      } else if (error.message.includes('Network')) {
+        throw new Error('Network error while generating report. Please check your connection.');
+      } else if (error.message.includes('Malformed URL')) {
+        throw new Error('Invalid report request. Please refresh the page and try again.');
       }
     }
 
@@ -1828,46 +2007,63 @@ export const getInventoryStatusReport = async (token: string): Promise<Inventory
   );
 };
 
+// export const exportReportExcel = async (
+//   token: string,
+//   reportType: string,
+//   params?: Record<string, string>
+// ): Promise<Blob> => {
+//   let url = `${API_ENDPOINTS.EXPORT_EXCEL}?report_type=${reportType}`;
+
+//   if (params) {
+//     const searchParams = new URLSearchParams(params);
+//     url += `&${searchParams.toString()}`;
+//   }
+
+//   const response = await fetch(getApiUrl(url), createAuthenticatedRequest(token));
+
+//   if (!response.ok) {
+//     throw new Error('Export failed');
+//   }
+
+//   return response.blob();
+// };
+
+// export const exportReportPDF = async (
+//   token: string,
+//   reportType: string,
+//   params?: Record<string, string>
+// ): Promise<Blob> => {
+//   let url = `${API_ENDPOINTS.EXPORT_PDF}?report_type=${reportType}`;
+
+//   if (params) {
+//     const searchParams = new URLSearchParams(params);
+//     url += `&${searchParams.toString()}`;
+//   }
+
+//   const response = await fetch(getApiUrl(url), createAuthenticatedRequest(token));
+
+//   if (!response.ok) {
+//     throw new Error('Export failed');
+//   }
+
+//   return response.blob();
+// };
+
+// Client-side export functions to replace problematic backend endpoints
 export const exportReportExcel = async (
   token: string,
   reportType: string,
   params?: Record<string, string>
-): Promise<Blob> => {
-  let url = `${API_ENDPOINTS.EXPORT_EXCEL}?report_type=${reportType}`;
-
-  if (params) {
-    const searchParams = new URLSearchParams(params);
-    url += `&${searchParams.toString()}`;
-  }
-
-  const response = await fetch(getApiUrl(url), createAuthenticatedRequest(token));
-
-  if (!response.ok) {
-    throw new Error('Export failed');
-  }
-
-  return response.blob();
+): Promise<void> => {
+  throw new Error('Excel export is temporarily unavailable. Please use PDF export or contact support.');
 };
 
 export const exportReportPDF = async (
   token: string,
   reportType: string,
   params?: Record<string, string>
-): Promise<Blob> => {
-  let url = `${API_ENDPOINTS.EXPORT_PDF}?report_type=${reportType}`;
-
-  if (params) {
-    const searchParams = new URLSearchParams(params);
-    url += `&${searchParams.toString()}`;
-  }
-
-  const response = await fetch(getApiUrl(url), createAuthenticatedRequest(token));
-
-  if (!response.ok) {
-    throw new Error('Export failed');
-  }
-
-  return response.blob();
+): Promise<void> => {
+  throw new Error('PDF export is temporarily unavailable. Please use the client-side PDF generation feature instead.');
 };
 
 // Dashboard Statistics

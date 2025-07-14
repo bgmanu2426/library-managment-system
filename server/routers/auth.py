@@ -264,3 +264,66 @@ async def auth_health_check(request: Request):
         "auth_system": "operational",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+@router.get("/token-debug")
+async def debug_token(request: Request):
+    """Debug endpoint to check token parsing without validation"""
+    correlation_id = logging_config.get_correlation_id()
+    client_ip = request.client.host if request else "unknown"
+    
+    api_logger.info(f"[{correlation_id}] Token debug endpoint accessed from IP {client_ip}")
+    
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            api_logger.warning(f"[{correlation_id}] Token debug - No Authorization header provided from IP {client_ip}")
+            return {
+                "valid": False,
+                "error": "No Authorization header provided",
+                "header_present": False
+            }
+            
+        # Check Bearer token format
+        token_match = re.match(r"Bearer\s+(.+)", auth_header)
+        if not token_match:
+            api_logger.warning(f"[{correlation_id}] Token debug - Invalid Authorization format from IP {client_ip}")
+            return {
+                "valid": False,
+                "error": "Invalid Authorization header format, expected 'Bearer {token}'",
+                "header_present": True,
+                "header_format_valid": False,
+                "header_preview": auth_header[:15] + "..." if len(auth_header) > 15 else auth_header
+            }
+            
+        token = token_match.group(1)
+        token_parts = token.split('.')
+        
+        if len(token_parts) != 3:
+            api_logger.warning(f"[{correlation_id}] Token debug - Invalid JWT format (expected 3 parts) from IP {client_ip}")
+            return {
+                "valid": False,
+                "error": "Token is not in valid JWT format (header.payload.signature)",
+                "header_present": True,
+                "header_format_valid": True,
+                "token_format_valid": False,
+                "token_parts_count": len(token_parts),
+                "token_preview": token[:10] + "..."
+            }
+            
+        # Return debug information without validating the token
+        api_logger.info(f"[{correlation_id}] Token debug completed successfully from IP {client_ip}")
+        return {
+            "header_present": True,
+            "header_format_valid": True,
+            "token_format_valid": True,
+            "token_parts_count": len(token_parts),
+            "token_preview": token[:10] + "...",
+            "note": "This endpoint only checks token format, not validity"
+        }
+        
+    except Exception as e:
+        logging_config.log_error(api_logger, f"Error in token debug endpoint: {str(e)}", correlation_id=correlation_id)
+        return {
+            "error": "Error processing token debug request",
+            "message": str(e)
+        }
