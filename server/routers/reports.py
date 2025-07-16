@@ -239,8 +239,9 @@ def parse_and_validate_datetime(date_param: Optional[datetime], param_name: str)
         if parsed_date.tzinfo:
             parsed_date = parsed_date.astimezone(None) # Convert to local naive time
         
-        # Validate date is not in future
-        if parsed_date > datetime.utcnow():
+        # Validate date is not in future (handle timezone comparison)
+        comparison_date = parsed_date.replace(tzinfo=None) if parsed_date.tzinfo else parsed_date
+        if comparison_date > datetime.utcnow():
             raise ValueError(f"{param_name} cannot be in the future")
 
         return parsed_date

@@ -1792,21 +1792,21 @@ export const getUserActivityReport = async (
     let url = API_ENDPOINTS.USER_ACTIVITY_REPORT;
     const params = new URLSearchParams();
 
-    // Add proper URL encoding for date parameters
+    // Add date parameters (URLSearchParams handles encoding automatically)
     if (startDate) {
       if (!isValidDate(startDate)) {
         throw new Error('Invalid start date format. Please use a valid date.');
       }
-      params.append('start_date', encodeURIComponent(startDate));
+      params.append('start_date', startDate);
     }
     if (endDate) {
       if (!isValidDate(endDate)) {
         throw new Error('Invalid end date format. Please use a valid date.');
       }
-      params.append('end_date', encodeURIComponent(endDate));
+      params.append('end_date', endDate);
     }
     if (userId && typeof userId === 'number' && userId > 0) {
-      params.append('user_id', encodeURIComponent(userId.toString()));
+      params.append('user_id', userId.toString());
     }
 
     if (params.toString()) {
@@ -1860,21 +1860,21 @@ export const getBookCirculationReport = async (
     let url = API_ENDPOINTS.BOOK_CIRCULATION_REPORT;
     const params = new URLSearchParams();
 
-    // Add proper URL encoding for parameters
+    // Add parameters (URLSearchParams handles encoding automatically)
     if (startDate) {
       if (!isValidDate(startDate)) {
         throw new Error('Invalid start date format. Please use a valid date.');
       }
-      params.append('start_date', encodeURIComponent(startDate));
+      params.append('start_date', startDate);
     }
     if (endDate) {
       if (!isValidDate(endDate)) {
         throw new Error('Invalid end date format. Please use a valid date.');
       }
-      params.append('end_date', encodeURIComponent(endDate));
+      params.append('end_date', endDate);
     }
     if (genre && typeof genre === 'string' && genre.trim()) {
-      params.append('genre', encodeURIComponent(genre.trim()));
+      params.append('genre', genre.trim());
     }
 
     if (params.toString()) {
@@ -1940,12 +1940,12 @@ export const getOverdueSummaryReport = async (
     let url = API_ENDPOINTS.OVERDUE_SUMMARY_REPORT;
     const params = new URLSearchParams();
 
-    // Add proper URL encoding for date parameters
+    // Add date parameters (URLSearchParams handles encoding automatically)
     if (startDate) {
-      params.append('start_date', encodeURIComponent(startDate));
+      params.append('start_date', startDate);
     }
     if (endDate) {
-      params.append('end_date', encodeURIComponent(endDate));
+      params.append('end_date', endDate);
     }
 
     if (params.toString()) {
@@ -2054,8 +2054,43 @@ export const exportReportExcel = async (
   token: string,
   reportType: string,
   params?: Record<string, string>
-): Promise<void> => {
-  throw new Error('Excel export is temporarily unavailable. Please use PDF export or contact support.');
+): Promise<Blob> => {
+  try {
+    validateAuthToken(token);
+    
+    // Build URL with proper parameter handling
+    let url = `${API_ENDPOINTS.EXPORT_EXCEL}?report_type=${reportType}`;
+    
+    if (params) {
+      const searchParams = new URLSearchParams(params);
+      url += `&${searchParams.toString()}`;
+    }
+    
+    // Validate constructed URL
+    const fullUrl = getApiUrl(url);
+    validateReportUrl(fullUrl, reportType);
+    
+    const response = await fetch(fullUrl, createAuthenticatedRequest(token));
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new Error(`Export failed with status ${response.status}: ${errorText}`);
+    }
+    
+    return response.blob();
+  } catch (error) {
+    console.error('Error exporting Excel report:', error);
+    if (error instanceof Error) {
+      if (error.message.includes('400') || error.message.includes('Bad Request')) {
+        throw new Error('Invalid export parameters. Please check your date range and filter settings.');
+      } else if (error.message.includes('401') || error.message.includes('Authentication')) {
+        throw new Error('Authentication expired. Please log in again to export reports.');
+      } else if (error.message.includes('403')) {
+        throw new Error('Access denied. You do not have permission to export reports.');
+      }
+    }
+    throw error;
+  }
 };
 
 export const exportReportPDF = async (

@@ -25,8 +25,7 @@ import {
   getBookCirculationReport,
   getOverdueSummaryReport,
   getInventoryStatusReport,
-  exportReportExcel,
-  exportReportPDF,
+
 } from '../../utils/api';
 import {
   UserActivityReport,
@@ -41,7 +40,7 @@ const Reports: React.FC = () => {
 
   // State management
   const [reportType, setReportType] = useState<
-    'user-activity' | 'book-circulation' | 'overdue-summary' | 'inventory-status'
+    'user-activity' | 'book-circulation' | 'overdue-summary' | 'inventory-status' | 'all-reports'
   >('user-activity');
   const [dateRange, setDateRange] = useState({
     start_date: '',
@@ -128,7 +127,7 @@ const Reports: React.FC = () => {
         setUserActivityData(userActivity?.user_activity_report || []);
         setBookCirculationData(bookCirculation?.book_circulation_report || []);
         setOverdueSummaryData(overdueSummary?.overdue_summary || null);
-        setInventoryStatusData(inventoryStatus || null);
+        setInventoryStatusData(inventoryStatus?.inventory_status || null);
 
         // Reset retry count on successful fetch
         setRetryCount(0);
@@ -344,102 +343,600 @@ const Reports: React.FC = () => {
     }, delay);
   };
 
-  const handleExportExcel = async () => {
-    if (!validateFormInputs()) {
-      showNotification('error', 'Invalid form data', 'Please fix the form errors before exporting.');
+
+
+  // CSV Export Functions
+  const exportUserActivityToCSV = () => {
+    if (userActivityData.length === 0) {
+      showNotification('warning', 'No data to export', 'Please generate a report first.');
       return;
+    }
+
+    const headers = ['User Name', 'USN', 'Total Books Borrowed', 'Current Books', 'Overdue Books', 'Total Fines', 'Last Activity'];
+    const csvContent = [
+      headers.join(','),
+      ...userActivityData.map(user => [
+        `"${user.user_name}"`,
+        user.user_usn,
+        user.total_books_borrowed,
+        user.current_books,
+        user.overdue_books,
+        user.total_fines,
+        user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `user-activity-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    showNotification('success', 'CSV exported successfully', 'User activity report has been downloaded.');
+  };
+
+  const exportBookCirculationToCSV = () => {
+    if (bookCirculationData.length === 0) {
+      showNotification('warning', 'No data to export', 'Please generate a report first.');
+      return;
+    }
+
+    const headers = ['Book Title', 'Author', 'ISBN', 'Total Issues', 'Current Status', 'Last Issued', 'Total Days Borrowed'];
+    const csvContent = [
+      headers.join(','),
+      ...bookCirculationData.map(book => [
+        `"${book.book_title}"`,
+        `"${book.book_author}"`,
+        book.book_isbn,
+        book.total_issues,
+        book.current_status,
+        book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
+        book.total_days_borrowed
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `book-circulation-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    showNotification('success', 'CSV exported successfully', 'Book circulation report has been downloaded.');
+  };
+
+  const exportOverdueSummaryToCSV = () => {
+    if (!overdueSummaryData) {
+      showNotification('warning', 'No data to export', 'Please generate a report first.');
+      return;
+    }
+
+    const headers = ['Metric', 'Value'];
+    const csvContent = [
+      headers.join(','),
+      `"Total Overdue Books",${overdueSummaryData.total_overdue_books}`,
+      `"Total Pending Fines","₹${overdueSummaryData.total_pending_fines}"`,
+      `"Total Paid Fines","₹${overdueSummaryData.total_paid_fines}"`,
+      `"Total Waived Fines","₹${overdueSummaryData.total_waived_fines}"`,
+      `"Average Overdue Days",${overdueSummaryData.average_overdue_days.toFixed(2)}`
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `overdue-summary-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    showNotification('success', 'CSV exported successfully', 'Overdue summary report has been downloaded.');
+  };
+
+  const exportInventoryStatusToCSV = () => {
+    if (!inventoryStatusData) {
+      showNotification('warning', 'No data to export', 'Please generate a report first.');
+      return;
+    }
+
+    const headers = ['Metric', 'Value'];
+    const csvSections = [
+      headers.join(','),
+      `"Total Books",${inventoryStatusData.total_books || 0}`,
+      `"Available Books",${inventoryStatusData.available_books || 0}`,
+      `"Issued Books",${inventoryStatusData.issued_books || 0}`,
+      `"Total Racks",${inventoryStatusData.total_racks || 0}`,
+      `"Total Shelves",${inventoryStatusData.total_shelves || 0}`,
+      '',
+      '"Shelf Utilization:"',
+      '"Shelf Name","Capacity","Current Books","Utilization %"'
+    ];
+    
+    if (inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0) {
+      inventoryStatusData.shelf_utilization.forEach(shelf => {
+        csvSections.push(`"${shelf.shelf_name || 'N/A'}",${shelf.capacity || 0},${shelf.current_books || 0},${(shelf.utilization_percentage || 0).toFixed(1)}%`);
+      });
+    } else {
+      csvSections.push('"No shelf utilization data available"');
     }
     
-    if (!auth.user) {
-      showNotification('error', 'Authentication required', 'Please log in to export reports.');
-      return;
-    }
+    const csvContent = csvSections.join('\n');
 
-    if (isOperationLoading || isRetrying) {
-      showNotification('warning', 'Export in progress', 'Please wait for the current export to complete.');
-      return;
-    }
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory-status-report-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    showNotification('success', 'CSV exported successfully', 'Inventory status report has been downloaded.');
+  };
 
-    const exportOperation = async () => {
-      setIsOperationLoading(true);
-      try {
-        const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-        if (!token) {
-          throw new Error('Authentication token not found. Please log in again.');
-        }
-        
-        const dateParams = getDateRangeParams();
-        const exportParams: Record<string, string> = {};
-        if (dateParams.start_date) exportParams.start_date = dateParams.start_date;
-        if (dateParams.end_date) exportParams.end_date = dateParams.end_date;
-        if (userIdFilter && reportType === 'user-activity')
-          exportParams.user_id = userIdFilter.toString();
-        if (genreFilter && reportType === 'book-circulation') exportParams.genre = genreFilter;
-
-        const blob = await exportReportExcel(token, reportType, exportParams);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${reportType}-report-${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        showNotification('success', 'Excel report exported successfully', 'The report has been downloaded to your device.');
-        setRetryCount(0); // Reset on success
-        setLastFailedOperation(null);
-      } catch (err) {
-        console.error('Failed to export Excel report:', err);
-        if (err instanceof Error) {
-          if (err.message.includes('401') || err.message.includes('Authentication')) {
-            showNotification('error', 'Authentication expired', 'Please log in again to export reports.');
-          } else if (err.message.includes('403')) {
-            showNotification('error', 'Access denied', 'You do not have permission to export reports.');
-          } else if (err.message.includes('400') || err.message.includes('Bad Request')) {
-            showNotification('error', 'Invalid export parameters', 'Please check your date range and filter settings, then try again.');
-          } else if (err.message.includes('405') || err.message.includes('Method Not Allowed')) {
-            showNotification('error', 'Export service unavailable', 'The export service may be under maintenance. Please try again later.');
-          } else if (err.message.includes('500')) {
-            showNotification('error', 'Server error during export', 'The server encountered an issue. Please try again in a few moments.');
-          } else if (err.message.includes('timeout') || err.message.includes('network')) {
-            showNotification('error', 'Network error during export', 'Please check your connection and try again.');
-          } else if (err.message.includes('temporarily unavailable')) {
-            showNotification('error', 'Export temporarily unavailable', err.message);
-          } else if (err.message.includes('Malformed URL') || err.message.includes('Invalid')) {
-            showNotification('error', 'Invalid export request', 'Please refresh the page and try again.');
-          } else {
-            showNotification('error', 'Export failed', err.message || 'An unexpected error occurred during export.');
-          }
-        } else {
-          showNotification('error', 'Unexpected export error', 'An unknown error occurred during export.');
-        }
-        throw err; // Re-throw for retry logic
-      } finally {
-        setIsOperationLoading(false);
-      }
-    };
-
+  const exportAllReportsToCSV = () => {
     try {
-      await exportOperation();
-    } catch (error: any) {
-      // Only retry if it's not an authentication, permission, or validation error
-      if (retryCount < maxRetries && !(error instanceof Error && (
-        error.message.includes('401') || 
-        error.message.includes('403') || 
-        error.message.includes('400') ||
-        error.message.includes('Invalid')
-      ))) {
-        await handleRetryWithBackoff(exportOperation, 'Excel export');
+      const currentDate = new Date().toISOString().split('T')[0];
+      const csvSections = [];
+      
+      // Header section
+      csvSections.push('"Library Management System - Complete Report"');
+      csvSections.push(`"Generated Date","${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}"`);
+      csvSections.push(`"Date Range","${customDateRange.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}"`);
+      csvSections.push('');
+      
+      // User Activity Section
+      if (userActivityData && userActivityData.length > 0) {
+        csvSections.push('"=== USER ACTIVITY REPORT ==="');
+        csvSections.push('"User Name","USN","Total Books Borrowed","Current Books","Overdue Books","Total Fines","Last Activity"');
+        userActivityData.forEach(user => {
+          csvSections.push([
+            `"${user.user_name || 'N/A'}"`,
+            user.user_usn || 'N/A',
+            user.total_books_borrowed || 0,
+            user.current_books || 0,
+            user.overdue_books || 0,
+            user.total_fines || 0,
+            user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'
+          ].join(','));
+        });
+        csvSections.push('');
       } else {
-        setIsRetrying(false);
-        setLastFailedOperation('Excel export');
+        csvSections.push('"=== USER ACTIVITY REPORT ==="');
+        csvSections.push('"No user activity data available"');
+        csvSections.push('');
       }
+      
+      // Book Circulation Section
+      if (bookCirculationData && bookCirculationData.length > 0) {
+        csvSections.push('"=== BOOK CIRCULATION REPORT ==="');
+        csvSections.push('"Book Title","Author","ISBN","Total Issues","Current Status","Last Issued","Total Days Borrowed"');
+        bookCirculationData.forEach(book => {
+          csvSections.push([
+            `"${book.book_title || 'N/A'}"`,
+            `"${book.book_author || 'N/A'}"`,
+            book.book_isbn || 'N/A',
+            book.total_issues || 0,
+            book.current_status || 'N/A',
+            book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
+            book.total_days_borrowed || 0
+          ].join(','));
+        });
+        csvSections.push('');
+      } else {
+        csvSections.push('"=== BOOK CIRCULATION REPORT ==="');
+        csvSections.push('"No book circulation data available"');
+        csvSections.push('');
+      }
+      
+      // Overdue Summary Section
+      if (overdueSummaryData) {
+        csvSections.push('"=== OVERDUE SUMMARY REPORT ==="');
+        csvSections.push('"Metric","Value"');
+        csvSections.push(`"Total Overdue Books",${overdueSummaryData.total_overdue_books || 0}`);
+        csvSections.push(`"Total Pending Fines","₹${overdueSummaryData.total_pending_fines || 0}"`);
+        csvSections.push(`"Total Paid Fines","₹${overdueSummaryData.total_paid_fines || 0}"`);
+        csvSections.push(`"Total Waived Fines","₹${overdueSummaryData.total_waived_fines || 0}"`);
+        csvSections.push(`"Average Overdue Days",${(overdueSummaryData.average_overdue_days || 0).toFixed(2)}`);
+        csvSections.push('');
+      } else {
+        csvSections.push('"=== OVERDUE SUMMARY REPORT ==="');
+        csvSections.push('"No overdue summary data available"');
+        csvSections.push('');
+      }
+      
+      // Inventory Status Section
+      if (inventoryStatusData) {
+        csvSections.push('"=== INVENTORY STATUS REPORT ==="');
+        csvSections.push('"Metric","Value"');
+        csvSections.push(`"Total Books",${inventoryStatusData.total_books || 0}`);
+        csvSections.push(`"Available Books",${inventoryStatusData.available_books || 0}`);
+        csvSections.push(`"Issued Books",${inventoryStatusData.issued_books || 0}`);
+        csvSections.push(`"Total Racks",${inventoryStatusData.total_racks || 0}`);
+        csvSections.push(`"Total Shelves",${inventoryStatusData.total_shelves || 0}`);
+        csvSections.push('');
+        
+        if (inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0) {
+          csvSections.push('"=== SHELF UTILIZATION ==="');
+          csvSections.push('"Shelf Name","Capacity","Current Books","Utilization %"');
+          inventoryStatusData.shelf_utilization.forEach(shelf => {
+            csvSections.push(`"${shelf.shelf_name || 'N/A'}",${shelf.capacity || 0},${shelf.current_books || 0},${(shelf.utilization_percentage || 0).toFixed(1)}%`);
+          });
+        }
+      } else {
+        csvSections.push('"=== INVENTORY STATUS REPORT ==="');
+        csvSections.push('"No inventory status data available"');
+        csvSections.push('');
+      }
+      
+      const csvContent = csvSections.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `all-reports-${currentDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showNotification('success', 'All Reports CSV exported successfully', 'Complete report has been downloaded.');
+    } catch (error) {
+      console.error('CSV export error:', error);
+      showNotification('error', 'CSV export failed', 'Unable to generate CSV. Please try again.');
+    }
+  };
+
+  const handleExportCSV = () => {
+    // Check if we have any data to export for all-reports
+    if (reportType === 'all-reports') {
+      const hasUserData = userActivityData && userActivityData.length > 0;
+      const hasBookData = bookCirculationData && bookCirculationData.length > 0;
+      const hasOverdueData = overdueSummaryData !== null;
+      const hasInventoryData = inventoryStatusData !== null;
+      
+      if (!hasUserData && !hasBookData && !hasOverdueData && !hasInventoryData) {
+        showNotification('warning', 'No data to export', 'Please wait for reports to load before exporting.');
+        return;
+      }
+    }
+    
+    switch (reportType) {
+      case 'user-activity':
+        exportUserActivityToCSV();
+        break;
+      case 'book-circulation':
+        exportBookCirculationToCSV();
+        break;
+      case 'overdue-summary':
+        exportOverdueSummaryToCSV();
+        break;
+      case 'inventory-status':
+        exportInventoryStatusToCSV();
+        break;
+      case 'all-reports':
+        exportAllReportsToCSV();
+        break;
+      default:
+        showNotification('error', 'Export not supported', 'CSV export is not supported for this report type.');
     }
   };
 
   const handleExportPDF = async () => {
-    showNotification('error', 'PDF export unavailable', 'PDF export is currently disabled due to system maintenance. Please use Excel export for comprehensive data analysis.');
-    return;
+    showNotification('info', 'PDF export starting', 'Generating PDF report...');
+    try {
+      // Check if we have any data to export for all-reports
+      if (reportType === 'all-reports') {
+        const hasUserData = userActivityData && userActivityData.length > 0;
+        const hasBookData = bookCirculationData && bookCirculationData.length > 0;
+        const hasOverdueData = overdueSummaryData !== null;
+        const hasInventoryData = inventoryStatusData !== null;
+        
+        if (!hasUserData && !hasBookData && !hasOverdueData && !hasInventoryData) {
+          showNotification('warning', 'No data to export', 'Please wait for reports to load before exporting.');
+          return;
+        }
+      }
+      
+      // Dynamic import to reduce bundle size
+      const { jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+      
+      const doc = new jsPDF();
+      const currentDate = new Date();
+      
+      // Header
+      doc.setFillColor(59, 130, 246);
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Library Management System', 14, 20);
+      
+      doc.setFontSize(14);
+      doc.text('Report Export', 14, 30);
+      
+      // Report Info
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      doc.text(`Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1).replace('-', ' ')}`, 14, 50);
+      doc.text(`Generated: ${currentDate.toLocaleDateString()} ${currentDate.toLocaleTimeString()}`, 14, 57);
+      
+      let yPosition = 70;
+      
+      switch (reportType) {
+        case 'user-activity':
+          if (userActivityData.length === 0) {
+            doc.text('No user activity data available.', 14, yPosition);
+            break;
+          }
+          
+          autoTable(doc, {
+            startY: yPosition,
+            head: [['User Name', 'USN', 'Total Borrowed', 'Current', 'Overdue', 'Fines', 'Last Activity']],
+            body: userActivityData.map(user => [
+              user.user_name,
+              user.user_usn,
+              user.total_books_borrowed.toString(),
+              user.current_books.toString(),
+              user.overdue_books.toString(),
+              `₹${user.total_fines}`,
+              user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: [59, 130, 246] },
+            styles: { fontSize: 8 }
+          });
+          break;
+          
+        case 'book-circulation':
+          if (bookCirculationData.length === 0) {
+            doc.text('No book circulation data available.', 14, yPosition);
+            break;
+          }
+          
+          autoTable(doc, {
+            startY: yPosition,
+            head: [['Title', 'Author', 'ISBN', 'Issues', 'Status', 'Last Issued', 'Days Borrowed']],
+            body: bookCirculationData.map(book => [
+              book.book_title,
+              book.book_author,
+              book.book_isbn,
+              book.total_issues.toString(),
+              book.current_status,
+              book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
+              book.total_days_borrowed.toString()
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: [59, 130, 246] },
+            styles: { fontSize: 8 }
+          });
+          break;
+          
+        case 'overdue-summary':
+          if (!overdueSummaryData) {
+            doc.text('No overdue summary data available.', 14, yPosition);
+            break;
+          }
+          
+          autoTable(doc, {
+            startY: yPosition,
+            head: [['Metric', 'Value']],
+            body: [
+              ['Total Overdue Books', overdueSummaryData.total_overdue_books.toString()],
+              ['Total Pending Fines', `₹${overdueSummaryData.total_pending_fines}`],
+              ['Total Paid Fines', `₹${overdueSummaryData.total_paid_fines}`],
+              ['Total Waived Fines', `₹${overdueSummaryData.total_waived_fines}`],
+              ['Average Overdue Days', `${overdueSummaryData.average_overdue_days.toFixed(2)} days`]
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [59, 130, 246] },
+            styles: { fontSize: 10 }
+          });
+          break;
+          
+        case 'inventory-status':
+          if (!inventoryStatusData) {
+            doc.text('No inventory status data available.', 14, yPosition);
+            break;
+          }
+          
+          // Main metrics
+          autoTable(doc, {
+            startY: yPosition,
+            head: [['Metric', 'Value']],
+            body: [
+              ['Total Books', (inventoryStatusData.total_books || 0).toString()],
+              ['Available Books', (inventoryStatusData.available_books || 0).toString()],
+              ['Issued Books', (inventoryStatusData.issued_books || 0).toString()],
+              ['Total Racks', (inventoryStatusData.total_racks || 0).toString()],
+              ['Total Shelves', (inventoryStatusData.total_shelves || 0).toString()]
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [59, 130, 246] },
+            styles: { fontSize: 10 }
+          });
+          
+          // Shelf utilization
+          if (inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0) {
+            const finalY = (doc as any).lastAutoTable.finalY || yPosition + 50;
+            
+            autoTable(doc, {
+              startY: finalY + 10,
+              head: [['Shelf Name', 'Capacity', 'Current Books', 'Utilization %']],
+              body: inventoryStatusData.shelf_utilization.map(shelf => [
+                shelf.shelf_name || 'N/A',
+                (shelf.capacity || 0).toString(),
+                (shelf.current_books || 0).toString(),
+                `${(shelf.utilization_percentage || 0).toFixed(1)}%`
+              ]),
+              theme: 'grid',
+              headStyles: { fillColor: [16, 185, 129] },
+              styles: { fontSize: 9 }
+            });
+          }
+          break;
+          
+        case 'all-reports':
+          let currentY = yPosition;
+          
+          // User Activity Section
+          if (userActivityData && userActivityData.length > 0) {
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('User Activity Report', 14, currentY);
+            currentY += 10;
+            
+            autoTable(doc, {
+              startY: currentY,
+              head: [['User Name', 'USN', 'Total Borrowed', 'Current', 'Overdue', 'Fines']],
+              body: userActivityData.map(user => [
+                user.user_name || 'N/A',
+                user.user_usn || 'N/A',
+                (user.total_books_borrowed || 0).toString(),
+                (user.current_books || 0).toString(),
+                (user.overdue_books || 0).toString(),
+                `₹${user.total_fines || 0}`
+              ]),
+              theme: 'grid',
+              headStyles: { fillColor: [59, 130, 246] },
+              styles: { fontSize: 7 }
+            });
+            
+            currentY = (doc as any).lastAutoTable.finalY + 15;
+          } else {
+            doc.setFontSize(12);
+            doc.text('User Activity Report: No data available', 14, currentY);
+            currentY += 20;
+          }
+          
+          // Book Circulation Section
+          if (bookCirculationData && bookCirculationData.length > 0) {
+            if (currentY > 200) {
+              doc.addPage();
+              currentY = 20;
+            }
+            
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Book Circulation Report', 14, currentY);
+            currentY += 10;
+            
+            autoTable(doc, {
+              startY: currentY,
+              head: [['Title', 'Author', 'Issues', 'Status', 'Days Borrowed']],
+              body: bookCirculationData.map(book => [
+                (book.book_title && book.book_title.length > 30) ? book.book_title.substring(0, 30) + '...' : (book.book_title || 'N/A'),
+                (book.book_author && book.book_author.length > 20) ? book.book_author.substring(0, 20) + '...' : (book.book_author || 'N/A'),
+                (book.total_issues || 0).toString(),
+                book.current_status || 'N/A',
+                (book.total_days_borrowed || 0).toString()
+              ]),
+              theme: 'grid',
+              headStyles: { fillColor: [16, 185, 129] },
+              styles: { fontSize: 7 }
+            });
+            
+            currentY = (doc as any).lastAutoTable.finalY + 15;
+          } else {
+            if (currentY > 220) {
+              doc.addPage();
+              currentY = 20;
+            }
+            doc.setFontSize(12);
+            doc.text('Book Circulation Report: No data available', 14, currentY);
+            currentY += 20;
+          }
+          
+          // Overdue Summary Section
+          if (overdueSummaryData) {
+            if (currentY > 220) {
+              doc.addPage();
+              currentY = 20;
+            }
+            
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Overdue Summary Report', 14, currentY);
+            currentY += 10;
+            
+            autoTable(doc, {
+              startY: currentY,
+              head: [['Metric', 'Value']],
+              body: [
+                ['Total Overdue Books', (overdueSummaryData.total_overdue_books || 0).toString()],
+                ['Total Pending Fines', `₹${overdueSummaryData.total_pending_fines || 0}`],
+                ['Total Paid Fines', `₹${overdueSummaryData.total_paid_fines || 0}`],
+                ['Total Waived Fines', `₹${overdueSummaryData.total_waived_fines || 0}`],
+                ['Average Overdue Days', `${(overdueSummaryData.average_overdue_days || 0).toFixed(2)} days`]
+              ],
+              theme: 'grid',
+              headStyles: { fillColor: [239, 68, 68] },
+              styles: { fontSize: 9 }
+            });
+            
+            currentY = (doc as any).lastAutoTable.finalY + 15;
+          } else {
+            if (currentY > 220) {
+              doc.addPage();
+              currentY = 20;
+            }
+            doc.setFontSize(12);
+            doc.text('Overdue Summary Report: No data available', 14, currentY);
+            currentY += 20;
+          }
+          
+          // Inventory Status Section
+          if (inventoryStatusData) {
+            if (currentY > 220) {
+              doc.addPage();
+              currentY = 20;
+            }
+            
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Inventory Status Report', 14, currentY);
+            currentY += 10;
+            
+            autoTable(doc, {
+              startY: currentY,
+              head: [['Metric', 'Value']],
+              body: [
+                ['Total Books', (inventoryStatusData.total_books || 0).toString()],
+                ['Available Books', (inventoryStatusData.available_books || 0).toString()],
+                ['Issued Books', (inventoryStatusData.issued_books || 0).toString()],
+                ['Total Racks', (inventoryStatusData.total_racks || 0).toString()],
+                ['Total Shelves', (inventoryStatusData.total_shelves || 0).toString()]
+              ],
+              theme: 'grid',
+              headStyles: { fillColor: [245, 158, 11] },
+              styles: { fontSize: 9 }
+            });
+          } else {
+            if (currentY > 220) {
+              doc.addPage();
+              currentY = 20;
+            }
+            doc.setFontSize(12);
+            doc.text('Inventory Status Report: No data available', 14, currentY);
+          }
+          break;
+      }
+      
+      // Save the PDF
+      const fileName = reportType === 'all-reports' ? 'complete-library-report' : `${reportType}-report`;
+      doc.save(`${fileName}-${new Date().toISOString().split('T')[0]}.pdf`);
+      showNotification('success', 'PDF exported successfully', 'Report has been downloaded to your device.');
+      
+    } catch (error) {
+      console.error('PDF export error:', error);
+      showNotification('error', 'PDF export failed', 'Unable to generate PDF. Please try again.');
+    }
   };
 
   const handleResetFilters = () => {
@@ -764,32 +1261,224 @@ const Reports: React.FC = () => {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Shelf Utilization</h3>
               <div className="space-y-4">
-                {inventoryStatusData.shelf_utilization.map(shelf => (
-                  <div key={shelf.shelf_id} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium text-gray-700">{shelf.shelf_name}</span>
-                      <span className="text-gray-600">
-                        {shelf.current_books}/{shelf.capacity} ({shelf.utilization_percentage}%)
-                      </span>
+                {inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0 ? (
+                  inventoryStatusData.shelf_utilization.map(shelf => (
+                    <div key={shelf.shelf_id} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium text-gray-700">{shelf.shelf_name}</span>
+                        <span className="text-gray-600">
+                          {shelf.current_books}/{shelf.capacity} ({shelf.utilization_percentage}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-1000 ease-out ${
+                            shelf.utilization_percentage >= 90
+                              ? 'bg-red-500'
+                              : shelf.utilization_percentage >= 75
+                                 ? 'bg-amber-500'
+                                 : 'bg-green-500'
+                          }`}
+                          style={{ width: `${shelf.utilization_percentage}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all duration-1000 ease-out ${
-                          shelf.utilization_percentage >= 90
-                            ? 'bg-red-500'
-                            : shelf.utilization_percentage >= 75
-                               ? 'bg-amber-500'
-                               : 'bg-green-500'
-                        }`}
-                        style={{ width: `${shelf.utilization_percentage}%` }}
-                      ></div>
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500">No shelf utilization data available.</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
         ) : null;
+
+      case 'all-reports':
+        return (
+          <div className="space-y-8">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+              <h2 className="text-2xl font-bold mb-2">Complete Library Report</h2>
+              <p className="text-indigo-100">Comprehensive view of all library operations</p>
+            </div>
+            
+            {/* Quick Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <Users className="w-8 h-8 text-blue-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Active Users</p>
+                    <p className="text-2xl font-bold text-gray-900">{userActivityData?.length || 0}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <BookOpen className="w-8 h-8 text-green-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Books</p>
+                    <p className="text-2xl font-bold text-gray-900">{bookCirculationData?.length || 0}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-red-100 rounded-lg">
+                    <AlertTriangle className="w-8 h-8 text-red-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Overdue Books</p>
+                    <p className="text-2xl font-bold text-gray-900">{overdueSummaryData?.total_overdue_books || 0}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <Target className="w-8 h-8 text-purple-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Available Books</p>
+                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData?.available_books || 0}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Export Notice */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <Info className="w-5 h-5 text-amber-600 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-medium text-amber-800">Complete Report View</h4>
+                  <p className="text-sm text-amber-700 mt-1">
+                    This view shows a summary of all reports. Use the PDF or CSV export buttons above to download the complete detailed data for all report types.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Summary Cards for Each Report Type */}
+            <div className="space-y-6">
+              {/* User Activity Summary */}
+              {userActivityData && userActivityData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Users className="w-5 h-5 mr-2 text-blue-600" />
+                    User Activity Summary
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <p className="text-2xl font-bold text-blue-600">{userActivityData?.length || 0}</p>
+                      <p className="text-sm text-gray-600">Active Users</p>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <p className="text-2xl font-bold text-green-600">
+                        {userActivityData.reduce((sum, user) => sum + user.total_books_borrowed, 0)}
+                      </p>
+                      <p className="text-sm text-gray-600">Total Books Borrowed</p>
+                    </div>
+                    <div className="text-center p-4 bg-red-50 rounded-lg">
+                      <p className="text-2xl font-bold text-red-600">
+                        {userActivityData.reduce((sum, user) => sum + user.total_fines, 0)}
+                      </p>
+                      <p className="text-sm text-gray-600">Total Fines</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Book Circulation Summary */}
+              {bookCirculationData && bookCirculationData.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <BookOpen className="w-5 h-5 mr-2 text-green-600" />
+                    Book Circulation Summary
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <p className="text-2xl font-bold text-green-600">{bookCirculationData?.length || 0}</p>
+                      <p className="text-sm text-gray-600">Books in Catalog</p>
+                    </div>
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <p className="text-2xl font-bold text-blue-600">
+                        {bookCirculationData?.reduce((sum, book) => sum + (book.total_issues || 0), 0) || 0}
+                      </p>
+                      <p className="text-sm text-gray-600">Total Issues</p>
+                    </div>
+                    <div className="text-center p-4 bg-amber-50 rounded-lg">
+                      <p className="text-2xl font-bold text-amber-600">
+                        {bookCirculationData?.filter(book => book.current_status === 'Issued').length || 0}
+                      </p>
+                      <p className="text-sm text-gray-600">Currently Issued</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Overdue Summary */}
+              {overdueSummaryData && (
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <AlertTriangle className="w-5 h-5 mr-2 text-red-600" />
+                    Overdue Summary
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="text-center p-4 bg-red-50 rounded-lg">
+                      <p className="text-2xl font-bold text-red-600">{overdueSummaryData.total_overdue_books}</p>
+                      <p className="text-sm text-gray-600">Overdue Books</p>
+                    </div>
+                    <div className="text-center p-4 bg-orange-50 rounded-lg">
+                      <p className="text-2xl font-bold text-orange-600">₹{overdueSummaryData.total_pending_fines}</p>
+                      <p className="text-sm text-gray-600">Pending Fines</p>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <p className="text-2xl font-bold text-green-600">₹{overdueSummaryData.total_paid_fines}</p>
+                      <p className="text-sm text-gray-600">Paid Fines</p>
+                    </div>
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <p className="text-2xl font-bold text-blue-600">{overdueSummaryData.average_overdue_days.toFixed(1)}</p>
+                      <p className="text-sm text-gray-600">Avg Overdue Days</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Inventory Summary */}
+              {inventoryStatusData && (
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Target className="w-5 h-5 mr-2 text-purple-600" />
+                    Inventory Summary
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <p className="text-2xl font-bold text-blue-600">{inventoryStatusData.total_books}</p>
+                      <p className="text-sm text-gray-600">Total Books</p>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <p className="text-2xl font-bold text-green-600">{inventoryStatusData.available_books}</p>
+                      <p className="text-sm text-gray-600">Available</p>
+                    </div>
+                    <div className="text-center p-4 bg-amber-50 rounded-lg">
+                      <p className="text-2xl font-bold text-amber-600">{inventoryStatusData.issued_books}</p>
+                      <p className="text-sm text-gray-600">Issued</p>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                      <p className="text-2xl font-bold text-purple-600">{inventoryStatusData.total_shelves}</p>
+                      <p className="text-sm text-gray-600">Total Shelves</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
 
       default:
         return null;
@@ -915,6 +1604,7 @@ const Reports: React.FC = () => {
                   <option value="book-circulation">Book Circulation Report</option>
                   <option value="overdue-summary">Overdue Summary Report</option>
                   <option value="inventory-status">Inventory Status Report</option>
+                  <option value="all-reports">All Reports (Combined)</option>
                 </select>
               </div>
             </div>
@@ -1046,26 +1736,24 @@ const Reports: React.FC = () => {
                 Generate downloadable reports in your preferred format:
               </p>
               <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
-                <button
-                  onClick={handleExportExcel}
-                  disabled={isOperationLoading || isRetrying || isLoading || Object.keys(formErrors).length > 0}
-                  className="flex items-center justify-center space-x-2 bg-emerald-600 text-white px-4 py-3 rounded-lg hover:bg-emerald-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-                >
-                  {isOperationLoading || isRetrying ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Download className="w-5 h-5" />
-                  )}
-                  <span>{isOperationLoading || isRetrying ? 'Generating...' : 'Export Excel'}</span>
-                </button>
+
                 <button
                   onClick={handleExportPDF}
-                  disabled={true}
-                  className="flex items-center justify-center space-x-2 bg-gray-400 text-white px-4 py-3 rounded-lg cursor-not-allowed transition-all duration-200 shadow-md opacity-50"
-                  title="PDF export is temporarily unavailable due to system maintenance"
+                  disabled={isLoading || isOperationLoading || isRetrying}
+                  className="flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-all duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Export report as PDF document"
                 >
                   <FileText className="w-5 h-5" />
-                  <span>PDF Unavailable</span>
+                  <span>Export PDF</span>
+                </button>
+                <button
+                  onClick={handleExportCSV}
+                  disabled={isLoading || isOperationLoading || isRetrying}
+                  className="flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg transition-all duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Export report as CSV file"
+                >
+                  <Download className="w-5 h-5" />
+                  <span>Export CSV</span>
                 </button>
               </div>
             </div>
@@ -1080,11 +1768,12 @@ const Reports: React.FC = () => {
                 </div>
                 <div className="flex-1">
                   <h4 className="text-sm font-medium text-blue-900 mb-1">Export Information</h4>
-                  <p className="text-sm text-blue-700">
-                    <strong>Excel:</strong> Comprehensive data export with proper formatting for analysis in spreadsheet applications. Includes all filtered data and calculations.
+
+                  <p className="text-sm text-red-700 mt-2">
+                    <strong>PDF:</strong> Formatted report document with tables and branding, perfect for presentations and formal reporting.
                   </p>
-                  <p className="text-sm text-orange-700 mt-2">
-                    <strong>PDF:</strong> Currently unavailable due to system maintenance. Use Excel export for complete data analysis and reporting needs.
+                  <p className="text-sm text-green-700 mt-2">
+                    <strong>CSV:</strong> Raw data export compatible with Excel, Google Sheets, and other spreadsheet applications for custom analysis.
                   </p>
                   {Object.keys(formErrors).length > 0 && (
                     <p className="text-sm text-red-700 mt-2">

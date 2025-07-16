@@ -10,6 +10,7 @@ import time
 import re
 import json
 import traceback
+from urllib.parse import unquote
 from fastapi import FastAPI, Request, Response, status, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -388,16 +389,29 @@ async def validate_request_parameters(request: Request, call_next):
         if request.query_params:
             query_params = dict(request.query_params)
             
-            # Validate date parameters
+            # Validate date parameters with URL decoding
             for date_param in ["start_date", "end_date"]:
                 if date_param in query_params:
                     date_value = query_params[date_param]
                     if date_value:
                         try:
+                            # URL decode the date value to handle potential double encoding
+                            decoded_date_value = unquote(date_value)
+                            
+                            # If still URL encoded, decode again (handles double encoding)
+                            if '%' in decoded_date_value:
+                                decoded_date_value = unquote(decoded_date_value)
+                            
+                            # Log the decoding process for debugging
+                            if date_value != decoded_date_value:
+                                logging_config.log_api_operation(f"URL decoded {date_param}: {date_value} -> {decoded_date_value}", correlation_id=correlation_id)
+                            
                             # Parse and validate date format
-                            parsed_date = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
-                            if parsed_date > datetime.utcnow():
-                                logging_config.log_error(api_logger, f"Future date provided for {date_param}: {date_value}", correlation_id=correlation_id)
+                            parsed_date = datetime.fromisoformat(decoded_date_value.replace('Z', '+00:00'))
+                            # Convert to UTC for comparison if timezone aware
+                            comparison_date = parsed_date.replace(tzinfo=None) if parsed_date.tzinfo else parsed_date
+                            if comparison_date > datetime.utcnow():
+                                logging_config.log_error(api_logger, f"Future date provided for {date_param}: {decoded_date_value}", correlation_id=correlation_id)
                                 return JSONResponse(
                                     status_code=status.HTTP_400_BAD_REQUEST,
                                     content={
@@ -408,14 +422,21 @@ async def validate_request_parameters(request: Request, call_next):
                                     }
                                 )
                         except ValueError as e:
-                            logging_config.log_error(api_logger, f"Invalid date format for {date_param}: {date_value}", correlation_id=correlation_id)
+                            logging_config.log_error(api_logger, f"Invalid date format for {date_param}: {date_value} (original)", correlation_id=correlation_id)
+                            logging_config.log_error(api_logger, f"Decoding attempts and error details: {str(e)}", correlation_id=correlation_id)
                             return JSONResponse(
                                 status_code=status.HTTP_400_BAD_REQUEST,
                                 content={
                                     "status": "error",
-                                    "detail": f"Invalid {date_param} format. Expected ISO 8601 format.",
+                                    "detail": f"Invalid {date_param} format. Expected ISO 8601 format (YYYY-MM-DDTHH:MM:SS.sssZ).",
                                     "type": "ValidationError",
-                                    "field": date_param
+                                    "field": date_param,
+                                    "debug_info": f"Received: {date_value}",
+                                    "suggestions": [
+                                        "Ensure date is in ISO 8601 format",
+                                        "Check for proper URL encoding",
+                                        "Example: 2025-01-01T00:00:00.000Z"
+                                    ]
                                 }
                             )
             
