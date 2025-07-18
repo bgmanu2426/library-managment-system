@@ -15,13 +15,9 @@ import {
   CheckCircle,
   AlertTriangle,
   RefreshCw,
-  Loader
+  Loader,
 } from 'lucide-react';
-import {
-  getUserProfile,
-  updateUserProfile,
-  getBookHistory
-} from '../../utils/api';
+import { getUserProfile, updateUserProfile, getBookHistory } from '../../utils/api';
 import { User as UserType, UserProfileUpdatePayload } from '../../types';
 
 const UserProfile: React.FC = () => {
@@ -31,16 +27,19 @@ const UserProfile: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
   // User statistics
   const [stats, setStats] = useState({
     current: 0,
     returned: 0,
     overdue: 0,
-    total: 0
+    total: 0,
   });
 
   useEffect(() => {
@@ -74,7 +73,7 @@ const UserProfile: React.FC = () => {
           current: transactions.filter(r => r.status === 'current').length,
           returned: transactions.filter(r => r.status === 'returned').length,
           overdue: transactions.filter(r => r.status === 'overdue').length,
-          total: transactions.length
+          total: transactions.length,
         });
       } catch (err) {
         console.error('Failed to fetch user profile:', err);
@@ -112,7 +111,7 @@ const UserProfile: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    const errors: {[key: string]: string} = {};
+    const errors: { [key: string]: string } = {};
 
     if (!editedUser?.name?.trim()) {
       errors.name = 'Name is required';
@@ -126,7 +125,10 @@ const UserProfile: React.FC = () => {
 
     if (!editedUser?.mobile?.trim()) {
       errors.mobile = 'Mobile number is required';
-    } else if (editedUser?.mobile && !/^\+?[\d\s\-\(\)]{10,}$/.test(editedUser.mobile.replace(/\D/g, ''))) {
+    } else if (
+      editedUser?.mobile &&
+      !/^\+?[\d\s\-\(\)]{10,}$/.test(editedUser.mobile.replace(/\D/g, ''))
+    ) {
       errors.mobile = 'Please enter a valid mobile number';
     }
 
@@ -152,7 +154,7 @@ const UserProfile: React.FC = () => {
         name: editedUser.name,
         email: editedUser.email,
         mobile: editedUser.mobile,
-        address: editedUser.address
+        address: editedUser.address,
       };
 
       await updateUserProfile(token, updateData);
@@ -248,7 +250,9 @@ const UserProfile: React.FC = () => {
             <User className="w-12 h-12 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900">{displayUser.name}</h2>
-          <p className="text-gray-600">{displayUser.role === 'admin' ? 'Administrator' : 'Student'}</p>
+          <p className="text-gray-600">
+            {displayUser.role === 'admin' ? 'Administrator' : 'Student'}
+          </p>
         </div>
 
         <div className="p-8">
@@ -270,7 +274,11 @@ const UserProfile: React.FC = () => {
                   disabled={isUpdating}
                   className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors duration-200 disabled:opacity-50"
                 >
-                  {isUpdating ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {isUpdating ? (
+                    <Loader className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
                   <span>Save</span>
                 </button>
                 <button
@@ -297,13 +305,19 @@ const UserProfile: React.FC = () => {
                   <input
                     type="text"
                     value={editedUser?.name || ''}
-                    onChange={(e) => setEditedUser(prev => prev ? { ...prev, name: e.target.value } : null)}
+                    onChange={e =>
+                      setEditedUser(prev => (prev ? { ...prev, name: e.target.value } : null))
+                    }
                     className={`w-full px-4 py-3 border ${formErrors.name ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   />
-                  {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
+                  {formErrors.name && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>
+                  )}
                 </>
               ) : (
-                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">{displayUser.name}</div>
+                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">
+                  {displayUser.name}
+                </div>
               )}
             </div>
 
@@ -328,13 +342,19 @@ const UserProfile: React.FC = () => {
                   <input
                     type="email"
                     value={editedUser?.email || ''}
-                    onChange={(e) => setEditedUser(prev => prev ? { ...prev, email: e.target.value } : null)}
+                    onChange={e =>
+                      setEditedUser(prev => (prev ? { ...prev, email: e.target.value } : null))
+                    }
                     className={`w-full px-4 py-3 border ${formErrors.email ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   />
-                  {formErrors.email && <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>}
+                  {formErrors.email && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
+                  )}
                 </>
               ) : (
-                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">{displayUser.email}</div>
+                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">
+                  {displayUser.email}
+                </div>
               )}
             </div>
 
@@ -349,13 +369,19 @@ const UserProfile: React.FC = () => {
                   <input
                     type="tel"
                     value={editedUser?.mobile || ''}
-                    onChange={(e) => setEditedUser(prev => prev ? { ...prev, mobile: e.target.value } : null)}
+                    onChange={e =>
+                      setEditedUser(prev => (prev ? { ...prev, mobile: e.target.value } : null))
+                    }
                     className={`w-full px-4 py-3 border ${formErrors.mobile ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent`}
                   />
-                  {formErrors.mobile && <p className="text-red-500 text-xs mt-1">{formErrors.mobile}</p>}
+                  {formErrors.mobile && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.mobile}</p>
+                  )}
                 </>
               ) : (
-                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">{displayUser.mobile}</div>
+                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">
+                  {displayUser.mobile}
+                </div>
               )}
             </div>
 
@@ -369,14 +395,20 @@ const UserProfile: React.FC = () => {
                 <>
                   <textarea
                     value={editedUser?.address || ''}
-                    onChange={(e) => setEditedUser(prev => prev ? { ...prev, address: e.target.value } : null)}
+                    onChange={e =>
+                      setEditedUser(prev => (prev ? { ...prev, address: e.target.value } : null))
+                    }
                     rows={3}
                     className={`w-full px-4 py-3 border ${formErrors.address ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'} rounded-lg focus:ring-2 focus:border-transparent resize-none`}
                   />
-                  {formErrors.address && <p className="text-red-500 text-xs mt-1">{formErrors.address}</p>}
+                  {formErrors.address && (
+                    <p className="text-red-500 text-xs mt-1">{formErrors.address}</p>
+                  )}
                 </>
               ) : (
-                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">{displayUser.address}</div>
+                <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">
+                  {displayUser.address}
+                </div>
               )}
             </div>
 
@@ -387,11 +419,13 @@ const UserProfile: React.FC = () => {
                 <span>Member Since</span>
               </label>
               <div className="bg-gray-50 px-4 py-3 rounded-lg text-gray-900">
-                {displayUser.created_at ? new Date(displayUser.created_at).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                }) : 'Not available'}
+                {displayUser.created_at
+                  ? new Date(displayUser.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  : 'Not available'}
               </div>
             </div>
 
@@ -402,11 +436,13 @@ const UserProfile: React.FC = () => {
                 <span>Role</span>
               </label>
               <div className="bg-gray-50 px-4 py-3 rounded-lg">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  displayUser.role === 'admin'
-                    ? 'bg-purple-100 text-purple-800'
-                    : 'bg-blue-100 text-blue-800'
-                }`}>
+                <span
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    displayUser.role === 'admin'
+                      ? 'bg-purple-100 text-purple-800'
+                      : 'bg-blue-100 text-blue-800'
+                  }`}
+                >
                   {displayUser.role === 'admin' ? 'Administrator' : 'Student'}
                 </span>
               </div>
@@ -455,9 +491,11 @@ const UserProfile: React.FC = () => {
 
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
-          notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
+        <div
+          className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
+            notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+          }`}
+        >
           <div className="flex items-center space-x-2">
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5" />

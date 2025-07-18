@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { 
-  BookOpen, 
-  LayoutDashboard, 
-  Users, 
-  Package, 
-  BarChart3, 
-  User, 
-  LogOut, 
+import {
+  BookOpen,
+  LayoutDashboard,
+  Users,
+  Package,
+  BarChart3,
+  User,
+  LogOut,
   Menu,
   X,
   History,
   AlertTriangle,
-  Layers,
-  Grid,
   Loader2,
-  Bell
+  Bell,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -29,14 +27,14 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  
+
   useEffect(() => {
     // Simulate loading transition when page changes
     setPageLoading(true);
     const timer = setTimeout(() => {
       setPageLoading(false);
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, [currentPage]);
 
@@ -64,13 +62,13 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     { id: 'users', label: 'Users', icon: Users },
     { id: 'inventory', label: 'Inventory', icon: Package },
     { id: 'overdue', label: 'Overdue & Fines', icon: AlertTriangle },
-    { id: 'reports', label: 'Reports', icon: BarChart3 }
+    { id: 'reports', label: 'Reports', icon: BarChart3 },
   ];
 
   const userMenuItems = [
     { id: 'dashboard', label: 'Library', icon: BookOpen },
     { id: 'history', label: 'My Books', icon: History },
-    { id: 'profile', label: 'My Profile', icon: User }
+    { id: 'profile', label: 'My Profile', icon: User },
   ];
 
   const menuItems = user.role === 'admin' ? adminMenuItems : userMenuItems;
@@ -80,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
       setPageLoading(true);
       await logout();
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error('Logout failed:', error);
     } finally {
       setPageLoading(false);
     }
@@ -90,17 +88,19 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <div className={`
+      <div
+        className={`
         fixed inset-y-0 left-0 z-50 w-64 md:w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+      `}
+      >
         <div className="flex flex-col h-full">
           {/* Sidebar Header */}
           <div className="flex items-center justify-between h-16 md:h-18 px-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-emerald-50">
@@ -108,7 +108,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
               <div className="p-2 bg-gradient-to-r from-blue-600 to-emerald-600 rounded-lg shadow-md">
                 <BookOpen className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </div>
-              <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-emerald-600">Library</span>
+              <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-emerald-600">
+                Library
+              </span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -123,13 +125,18 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
                 <span className="text-sm font-medium text-white">
-                  {user.name?.split(' ').map(n => n?.[0]).join('') || 'U'}
+                  {user.name
+                    ?.split(' ')
+                    .map(n => n?.[0])
+                    .join('') || 'U'}
                 </span>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
                 <p className="text-xs text-gray-500 capitalize flex items-center">
-                  <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${user.role === 'admin' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full mr-1.5 ${user.role === 'admin' ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                  ></span>
                   {user.role}
                 </p>
               </div>
@@ -138,10 +145,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto scrollbar-thin">
-            {menuItems.map((item) => {
+            {menuItems.map(item => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
-              
+
               return (
                 <button
                   key={item.id}
@@ -151,14 +158,19 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
                   }}
                   className={`
                     w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-all duration-200 group text-base
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm border-l-4 border-blue-500' 
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-sm'
+                    ${
+                      isActive
+                        ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 shadow-sm border-l-4 border-blue-500'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-sm'
                     }
                   `}
                 >
-                  <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'text-blue-600 scale-110' : 'text-gray-500 group-hover:text-gray-700 group-hover:scale-105'}`} />
-                  <span className={`font-medium ${isActive ? 'text-blue-700' : ''}`}>{item.label}</span>
+                  <Icon
+                    className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'text-blue-600 scale-110' : 'text-gray-500 group-hover:text-gray-700 group-hover:scale-105'}`}
+                  />
+                  <span className={`font-medium ${isActive ? 'text-blue-700' : ''}`}>
+                    {item.label}
+                  </span>
                 </button>
               );
             })}
@@ -194,10 +206,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
                 <div className="p-1.5 bg-gradient-to-r from-blue-600 to-emerald-600 rounded-lg shadow-sm">
                   <BookOpen className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
-                <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-emerald-600">Library</span>
+                <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-emerald-600">
+                  Library
+                </span>
               </div>
             </div>
-            
+
             {/* Right side items */}
             <div className="flex items-center space-x-4">
               {/* Notifications */}
@@ -211,12 +225,15 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
                   )}
                 </button>
               </div>
-              
+
               {/* User info in header for larger screens */}
               <div className="hidden md:flex items-center space-x-3">
                 <div className="w-9 h-9 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-sm">
                   <span className="text-xs font-medium text-white">
-                    {user.name?.split(' ').map(n => n?.[0]).join('') || 'U'}
+                    {user.name
+                      ?.split(' ')
+                      .map(n => n?.[0])
+                      .join('') || 'U'}
                   </span>
                 </div>
                 <div className="text-sm">
@@ -236,7 +253,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
             </div>
           )}
-          
+
           {/* Page content */}
           <div className="bg-white shadow-sm rounded-lg p-4 md:p-6 border border-gray-100">
             {children}

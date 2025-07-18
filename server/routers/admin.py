@@ -1487,8 +1487,7 @@ async def return_book(
                 detail=f"Cannot return book '{book.title}'. User '{user.name}' has unpaid fine of ₹{existing_fine.fine_amount} for {existing_fine.days_overdue} overdue days. Please pay the fine first."
             )
         
-        # Calculate if book is overdue and fine amount
-        logging_config.log_api_operation("Calculating overdue status and fine amount", correlation_id=correlation_id)
+        # Calculate the fine amount if the book is overdue
         return_date = datetime.utcnow()
         is_overdue = return_date > book.return_date if book.return_date else False
         fine_amount = 0
@@ -1497,7 +1496,7 @@ async def return_book(
         if is_overdue and book.return_date:
             days_overdue = (return_date - book.return_date).days
             fine_amount = days_overdue * 5  # 5 rupees per day
-            api_logger.info(f"[{correlation_id}] Book is overdue by {days_overdue} days, fine amount: ₹{fine_amount}")
+            api_logger.info(f"[{correlation_id}] Book is overdue by {days_overdue} days, fine amount: ₹{fine_amount} is paid by the user.")
         
         # Update book status
         logging_config.log_api_operation(f"Updating book '{book.title}' (ID: {book.id}) to available", correlation_id=correlation_id)
@@ -1513,37 +1512,7 @@ async def return_book(
         transaction.fine_amount = fine_amount if is_overdue else None
         
         api_logger.info(f"[{correlation_id}] Updated transaction {transaction.id} status to '{transaction.status}'")
-        session.add(transaction)
-        
-        # Create fine record only if overdue and no existing fine
-        if is_overdue and fine_amount > 0:
-            logging_config.log_api_operation("Checking for existing fine record before creating new one", correlation_id=correlation_id)
-            # Double-check no existing fine for this transaction
-            existing_fine_check = session.exec(
-                select(Fine).where(Fine.book_history_id == transaction.id)
-            ).first()
-            
-            if not existing_fine_check:
-                logging_config.log_api_operation(f"Creating new fine record for transaction {transaction.id} with amount ₹{fine_amount}", correlation_id=correlation_id)
-                fine = Fine(
-                    user_id=return_data.user_id,
-                    user_name=user.name,
-                    user_usn=user.usn,
-                    book_history_id=transaction.id,
-                    book_title=book.title,
-                    book_author=book.author,
-                    book_isbn=book.isbn,
-                    days_overdue=days_overdue,
-                    fine_amount=fine_amount,
-                    issued_date=transaction.issued_date,
-                    due_date=transaction.due_date,
-                    return_date=return_date
-                )
-                session.add(fine)
-                api_logger.info(f"[{correlation_id}] Created new fine record for transaction {transaction.id}: ₹{fine_amount}")
-            else:
-                api_logger.info(f"[{correlation_id}] Fine already exists for transaction {transaction.id}, skipping duplicate creation")
-        
+        session.add(transaction)       
         session.add(book)
         session.commit()
         
@@ -1555,13 +1524,6 @@ async def return_book(
             "user_name": user.name,
             "return_date": return_date.isoformat()
         }
-        
-        if is_overdue:
-            response.update({
-                "fine_amount": fine_amount,
-                "days_overdue": days_overdue,
-                "warning": f"Book was overdue by {days_overdue} days. Fine of ₹{fine_amount} has been applied."
-            })
         
         api_logger.info(f"[{correlation_id}] Book return completed successfully: {response}")
         logging_config.log_performance(api_logger, "Book return operation", total_duration, correlation_id)

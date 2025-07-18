@@ -156,6 +156,7 @@ export interface BookUpdatePayload {
 
 export interface RackCreatePayload {
   name: string;
+  location?: string; // Optional field for location
   description: string;
 }
 
@@ -168,6 +169,7 @@ export interface ShelfCreatePayload {
   name: string;
   rack_id: number;
   capacity: number;
+  description?: string; // Optional field for additional info
 }
 
 export interface ShelfUpdatePayload {
@@ -192,7 +194,7 @@ export interface ReturnBookPayload {
 }
 
 export interface PayFinePayload {
-  payment_method?: 'cash' | 'card' | 'online' | 'upi';
+  payment_method?: 'cash' | 'card' | 'upi';
   notes?: string;
 }
 

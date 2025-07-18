@@ -3,7 +3,14 @@ from typing import Optional, Union, Dict, Any
 import logging
 import re
 import os
+import warnings
 from dotenv import load_dotenv
+
+# Suppress warnings for bcrypt compatibility issues
+warnings.filterwarnings("ignore", message=".*'__about__' not found.*")
+warnings.filterwarnings("ignore", category=UserWarning, module='passlib')
+warnings.filterwarnings("ignore", category=DeprecationWarning, module='passlib')
+warnings.filterwarnings("ignore", category=UserWarning, message=".*CryptographyDeprecationWarning.*")
 
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -26,7 +33,11 @@ ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
 
 # Password context for hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+try:
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+except AttributeError:
+    logger.warning("Caught AttributeError from bcrypt/__about__, continuing with CryptContext")
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # OAuth2 scheme for token authentication with more flexible URL pattern
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)

@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  AlertTriangle, 
-  DollarSign, 
-  Search, 
+import {
+  AlertTriangle,
+  IndianRupee,
+  Search,
   Filter,
-  Calendar,
-  User,
   BookOpen,
   CheckCircle,
   X,
@@ -13,27 +11,26 @@ import {
   CreditCard,
   UserX,
   Clock,
-  TrendingUp,
   FileText,
   RefreshCw,
   Loader,
-  Calculator
+  Calculator,
 } from 'lucide-react';
-import { 
-  getOverdueBooks, 
-  getFines, 
+import {
+  getOverdueBooks,
+  getFines,
   calculateFines,
-  payFine, 
-  waiveFine, 
-  getOverdueSummaryReport
+  payFine,
+  waiveFine,
+  getOverdueSummaryReport,
 } from '../../utils/api';
-import { 
-  OverdueBookResponse, 
-  FineResponse, 
-  PayFinePayload, 
-  WaiveFinePayload, 
+import {
+  OverdueBookResponse,
+  FineResponse,
+  PayFinePayload,
+  WaiveFinePayload,
   OverdueSummaryReport,
-  CalculateFinesPayload
+  CalculateFinesPayload,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -49,7 +46,7 @@ const OverdueManagement: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [finePerDay, setFinePerDay] = useState(10);
-  
+
   const { user } = useAuth();
   const [overdueBooks, setOverdueBooks] = useState<OverdueBookResponse[]>([]);
   const [fines, setFines] = useState<FineResponse[]>([]);
@@ -57,8 +54,11 @@ const OverdueManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalFines, setTotalFines] = useState(0);
@@ -70,19 +70,20 @@ const OverdueManagement: React.FC = () => {
   // Filter fines with defensive checks
   const filteredFines = (fines || []).filter(fine => {
     if (!fine) return false;
-    
+
     const userName = fine.user_name || '';
     const userUsn = fine.user_usn || '';
     const bookTitle = fine.book_title || '';
     const bookIsbn = fine.book_isbn || '';
-    
-    const matchesSearch = userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         userUsn.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         bookTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         bookIsbn.includes(searchTerm);
-    
+
+    const matchesSearch =
+      userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      userUsn.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bookTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bookIsbn.includes(searchTerm);
+
     const matchesFilter = filterStatus === 'all' || fine.status === filterStatus;
-    
+
     return matchesSearch && matchesFilter;
   });
 
@@ -96,7 +97,7 @@ const OverdueManagement: React.FC = () => {
   const stats = useMemo(() => {
     const safeOverdueStats = overdueStats || {};
     const safeFines = fines || [];
-    
+
     const totalAmount = safeFines.reduce((sum, f) => sum + (f?.fine_amount || 0), 0);
     const pendingAmount = safeOverdueStats.total_pending_fines || 0;
     const collectedAmount = safeOverdueStats.total_paid_fines || 0;
@@ -104,108 +105,114 @@ const OverdueManagement: React.FC = () => {
 
     return {
       totalFines: safeFines.length || 0,
-      pendingFines: safeFines.filter(f => f?.status === 'pending').length || 0,  
+      pendingFines: safeFines.filter(f => f?.status === 'pending').length || 0,
       paidFines: safeFines.filter(f => f?.status === 'paid').length || 0,
       waivedFines: safeFines.filter(f => f?.status === 'waived').length || 0,
       totalAmount: totalAmount,
       pendingAmount: pendingAmount,
       collectedAmount: collectedAmount,
       waivedAmount: waivedAmount,
-      currentOverdue: safeOverdueStats.total_overdue_books || 0
+      currentOverdue: safeOverdueStats.total_overdue_books || 0,
     };
   }, [overdueStats, fines]);
 
   // Enhanced fetch with retry mechanism and exponential backoff
-  const fetchData = useCallback(async (retryAttempt = 0) => {
-    if (!user) {
-      setError('Authentication required. Please log in to access overdue management.');
-      setIsLoading(false);
-      return;
-    }
-
-    if (retryAttempt === 0) {
-      setIsLoading(true);
-      setIsRetrying(false);
-    } else {
-      setIsRetrying(true);
-    }
-    setError(null);
-
-    try {
-      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      if (!token) {
-        throw new Error('Authentication token not found. Please log in again.');
-      }
-
-      // Implement timeout for requests
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 30000)
-      );
-
-      const dataPromise = Promise.all([
-        getOverdueBooks(token).catch(err => ({ overdue_books: [], error: err })),
-        getFines(token, filterStatus === 'all' ? undefined : filterStatus).catch(err => ({ fines: [], error: err })),
-        getOverdueSummaryReport(token).catch(err => ({ overdue_summary: null, error: err }))
-      ]);
-
-      const [overdueResponse, finesResponse, statsResponse] = await Promise.race([
-        dataPromise,
-        timeout
-      ]) as any[];
-
-      // Handle partial failures gracefully
-      if (overdueResponse.error) {
-        console.warn('Failed to fetch overdue books:', overdueResponse.error);
-        showNotification('error', 'Some overdue book data may be unavailable');
-      }
-      if (finesResponse.error) {
-        console.warn('Failed to fetch fines:', finesResponse.error);
-        showNotification('error', 'Some fine data may be unavailable');
-      }
-      if (statsResponse.error) {
-        console.warn('Failed to fetch stats:', statsResponse.error);
-        showNotification('error', 'Statistics may be unavailable');
-      }
-
-      setOverdueBooks(overdueResponse.overdue_books || []);
-      setFines(finesResponse.fines || []);
-      setTotalFines(finesResponse.fines?.length || 0);
-      setOverdueStats(statsResponse.overdue_summary || null);
-      setRetryCount(0);
-    } catch (err) {
-      console.error(`Failed to fetch overdue data (attempt ${retryAttempt + 1}):`, err);
-      
-      if (retryAttempt < maxRetries) {
-        const delay = Math.pow(2, retryAttempt) * 1000; // Exponential backoff
-        showNotification('error', `Loading failed, retrying in ${delay/1000} seconds...`);
-        setTimeout(() => {
-          setRetryCount(retryAttempt + 1);
-          fetchData(retryAttempt + 1);
-        }, delay);
+  const fetchData = useCallback(
+    async (retryAttempt = 0) => {
+      if (!user) {
+        setError('Authentication required. Please log in to access overdue management.');
+        setIsLoading(false);
         return;
       }
-      
-      // Handle different error types
-      if (err instanceof Error) {
-        if (err.message.includes('401') || err.message.includes('Authentication')) {
-          setError('Authentication expired. Please log in again.');
-        } else if (err.message.includes('403')) {
-          setError('You do not have permission to access this data.');
-        } else if (err.message.includes('timeout')) {
-          setError('Request timed out. Please check your connection and try again.');
-        } else if (err.message.includes('fetch')) {
-          setError('Network error. Please check your internet connection.');
-        } else {
-          setError(err.message || 'Failed to load overdue data');
-        }
+
+      if (retryAttempt === 0) {
+        setIsLoading(true);
+        setIsRetrying(false);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        setIsRetrying(true);
       }
-    } finally {
-      setIsLoading(false);
-      setIsRetrying(false);
-    }
-  }, [user, filterStatus, refreshKey, maxRetries]);
+      setError(null);
+
+      try {
+        const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+        if (!token) {
+          throw new Error('Authentication token not found. Please log in again.');
+        }
+
+        // Implement timeout for requests
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timeout')), 30000)
+        );
+
+        const dataPromise = Promise.all([
+          getOverdueBooks(token).catch(err => ({ overdue_books: [], error: err })),
+          getFines(token, filterStatus === 'all' ? undefined : filterStatus).catch(err => ({
+            fines: [],
+            error: err,
+          })),
+          getOverdueSummaryReport(token).catch(err => ({ overdue_summary: null, error: err })),
+        ]);
+
+        const [overdueResponse, finesResponse, statsResponse] = (await Promise.race([
+          dataPromise,
+          timeout,
+        ])) as any[];
+
+        // Handle partial failures gracefully
+        if (overdueResponse.error) {
+          console.warn('Failed to fetch overdue books:', overdueResponse.error);
+          showNotification('error', 'Some overdue book data may be unavailable');
+        }
+        if (finesResponse.error) {
+          console.warn('Failed to fetch fines:', finesResponse.error);
+          showNotification('error', 'Some fine data may be unavailable');
+        }
+        if (statsResponse.error) {
+          console.warn('Failed to fetch stats:', statsResponse.error);
+          showNotification('error', 'Statistics may be unavailable');
+        }
+
+        setOverdueBooks(overdueResponse.overdue_books || []);
+        setFines(finesResponse.fines || []);
+        setTotalFines(finesResponse.fines?.length || 0);
+        setOverdueStats(statsResponse.overdue_summary || null);
+        setRetryCount(0);
+      } catch (err) {
+        console.error(`Failed to fetch overdue data (attempt ${retryAttempt + 1}):`, err);
+
+        if (retryAttempt < maxRetries) {
+          const delay = Math.pow(2, retryAttempt) * 1000; // Exponential backoff
+          showNotification('error', `Loading failed, retrying in ${delay / 1000} seconds...`);
+          setTimeout(() => {
+            setRetryCount(retryAttempt + 1);
+            fetchData(retryAttempt + 1);
+          }, delay);
+          return;
+        }
+
+        // Handle different error types
+        if (err instanceof Error) {
+          if (err.message.includes('401') || err.message.includes('Authentication')) {
+            setError('Authentication expired. Please log in again.');
+          } else if (err.message.includes('403')) {
+            setError('You do not have permission to access this data.');
+          } else if (err.message.includes('timeout')) {
+            setError('Request timed out. Please check your connection and try again.');
+          } else if (err.message.includes('fetch')) {
+            setError('Network error. Please check your internet connection.');
+          } else {
+            setError(err.message || 'Failed to load overdue data');
+          }
+        } else {
+          setError('An unexpected error occurred. Please try again.');
+        }
+      } finally {
+        setIsLoading(false);
+        setIsRetrying(false);
+      }
+    },
+    [user, filterStatus, refreshKey, maxRetries]
+  );
 
   useEffect(() => {
     fetchData();
@@ -228,7 +235,7 @@ const OverdueManagement: React.FC = () => {
   }, []);
 
   const validateWaiveForm = (): boolean => {
-    const errors: {[key: string]: string} = {};
+    const errors: { [key: string]: string } = {};
     if (!waiveReason?.trim()) {
       errors.reason = 'Reason is required for waiving a fine';
     } else if (waiveReason.trim().length < 5) {
@@ -240,19 +247,27 @@ const OverdueManagement: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'text-amber-600 bg-amber-100';
-      case 'paid': return 'text-emerald-600 bg-emerald-100';
-      case 'waived': return 'text-blue-600 bg-blue-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'pending':
+        return 'text-amber-600 bg-amber-100';
+      case 'paid':
+        return 'text-emerald-600 bg-emerald-100';
+      case 'waived':
+        return 'text-blue-600 bg-blue-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'pending': return <Clock className="w-4 h-4" />;
-      case 'paid': return <CheckCircle className="w-4 h-4" />;
-      case 'waived': return <UserX className="w-4 h-4" />;
-      default: return <AlertTriangle className="w-4 h-4" />;
+      case 'pending':
+        return <Clock className="w-4 h-4" />;
+      case 'paid':
+        return <CheckCircle className="w-4 h-4" />;
+      case 'waived':
+        return <UserX className="w-4 h-4" />;
+      default:
+        return <AlertTriangle className="w-4 h-4" />;
     }
   };
 
@@ -262,7 +277,7 @@ const OverdueManagement: React.FC = () => {
       return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
       });
     } catch {
       return 'Invalid Date';
@@ -306,11 +321,14 @@ const OverdueManagement: React.FC = () => {
 
       const paymentData: PayFinePayload = {
         payment_method: paymentMethod,
-        notes: paymentNotes.trim() || `Paid via ${paymentMethod} at library counter`
+        notes: paymentNotes.trim() || `Paid via ${paymentMethod} at library counter`,
       };
 
       await payFine(token, selectedFine.id, paymentData);
-      showNotification('success', `Fine of ₹${selectedFine.fine_amount} marked as paid successfully via ${paymentMethod}`);
+      showNotification(
+        'success',
+        `Fine of ₹${selectedFine.fine_amount} marked as paid successfully via ${paymentMethod}`
+      );
       setShowPaymentModal(false);
       setSelectedFine(null);
       setPaymentMethod('cash'); // Reset state
@@ -342,7 +360,7 @@ const OverdueManagement: React.FC = () => {
 
       const waiveData: WaiveFinePayload = {
         reason: waiveReason.trim(),
-        notes: 'Waived by administrator'
+        notes: 'Waived by administrator',
       };
 
       await waiveFine(token, selectedFine.id, waiveData);
@@ -362,12 +380,13 @@ const OverdueManagement: React.FC = () => {
   };
 
   const handleCalculateFines = async () => {
+    const FINE_PER_DAY = 5;
     if (!user) {
       showNotification('error', 'Authentication required');
       return;
     }
 
-    if (finePerDay <= 0) {
+    if (FINE_PER_DAY <= 0) {
       showNotification('error', 'Fine per day must be greater than 0');
       return;
     }
@@ -380,7 +399,7 @@ const OverdueManagement: React.FC = () => {
       }
 
       const calculateData: CalculateFinesPayload = {
-        fine_per_day: finePerDay
+        fine_per_day: FINE_PER_DAY,
       };
 
       const response = await calculateFines(token, calculateData);
@@ -446,14 +465,14 @@ const OverdueManagement: React.FC = () => {
           <h1 className="text-3xl font-bold mb-2">Error Loading Overdue Data</h1>
           <p className="text-red-100 mb-4">{error}</p>
           <div className="flex space-x-3">
-            <button 
+            <button
               onClick={handleRefresh}
               className="flex items-center px-4 py-2 bg-white text-red-600 rounded-lg hover:bg-red-50 transition-colors"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
             </button>
-            <button 
+            <button
               onClick={() => window.location.reload()}
               className="flex items-center px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors"
             >
@@ -474,13 +493,15 @@ const OverdueManagement: React.FC = () => {
           <h1 className="text-3xl font-bold mb-2">Retrying...</h1>
           <div className="flex items-center space-x-3">
             <Loader className="w-5 h-5 animate-spin" />
-            <p className="text-amber-100">Attempting to reload data (attempt {retryCount + 1} of {maxRetries + 1})</p>
+            <p className="text-amber-100">
+              Attempting to reload data (attempt {retryCount + 1} of {maxRetries + 1})
+            </p>
           </div>
         </div>
       </div>
     );
   }
-  
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -489,20 +510,22 @@ const OverdueManagement: React.FC = () => {
         <p className="text-red-100">Manage overdue books, track fines, and process payments</p>
         <div className="absolute top-4 right-4 flex space-x-2">
           <button
-            onClick={() => setShowCalculateModal(true)}
+            onClick={handleCalculateFines}
             disabled={isLoading || isOperationLoading}
             className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50"
             title="Calculate Fines"
           >
             <Calculator className="w-4 h-4 text-white" />
           </button>
-          <button 
+          <button
             onClick={handleRefresh}
             disabled={isLoading || isOperationLoading}
             className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50"
             title="Refresh Data"
           >
-            <RefreshCw className={`w-4 h-4 text-white ${isLoading || isOperationLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-4 h-4 text-white ${isLoading || isOperationLoading ? 'animate-spin' : ''}`}
+            />
           </button>
         </div>
       </div>
@@ -527,7 +550,9 @@ const OverdueManagement: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Pending Fines</p>
               <p className="text-3xl font-bold text-amber-600">{stats.pendingFines}</p>
-              <p className="text-sm text-amber-800 mt-1">₹{stats.pendingAmount.toFixed(2)} pending</p>
+              <p className="text-sm text-amber-800 mt-1">
+                ₹{stats.pendingAmount.toFixed(2)} pending
+              </p>
             </div>
             <div className="p-3 bg-amber-100 rounded-lg">
               <Clock className="w-8 h-8 text-amber-600" />
@@ -539,11 +564,13 @@ const OverdueManagement: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Collected Fines</p>
-              <p className="text-3xl font-bold text-emerald-600">₹{stats.collectedAmount.toFixed(2)}</p>
+              <p className="text-3xl font-bold text-emerald-600">
+                ₹{stats.collectedAmount.toFixed(2)}
+              </p>
               <p className="text-sm text-emerald-800 mt-1">{stats.paidFines} payments</p>
             </div>
             <div className="p-3 bg-emerald-100 rounded-lg">
-              <DollarSign className="w-8 h-8 text-emerald-600" />
+              <IndianRupee className="w-8 h-8 text-emerald-600" />
             </div>
           </div>
         </div>
@@ -553,7 +580,9 @@ const OverdueManagement: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Waived Fines</p>
               <p className="text-3xl font-bold text-purple-600">{stats.waivedFines}</p>
-              <p className="text-sm text-purple-800 mt-1">₹{stats.waivedAmount.toFixed(2)} waived</p>
+              <p className="text-sm text-purple-800 mt-1">
+                ₹{stats.waivedAmount.toFixed(2)} waived
+              </p>
             </div>
             <div className="p-3 bg-purple-100 rounded-lg">
               <UserX className="w-8 h-8 text-purple-600" />
@@ -571,14 +600,14 @@ const OverdueManagement: React.FC = () => {
           </h3>
         </div>
 
-        {(!overdueBooks || overdueBooks.length === 0) ? (
+        {!overdueBooks || overdueBooks.length === 0 ? (
           <div className="text-center py-8">
             <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
             <p className="text-gray-500">No books are currently overdue!</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {overdueBooks.map((book) => {
+            {overdueBooks.map(book => {
               if (!book) return null;
               return (
                 <div key={book.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -591,12 +620,18 @@ const OverdueManagement: React.FC = () => {
                       <div className="text-xs text-red-800">days overdue</div>
                     </div>
                   </div>
-                  
-                  <h4 className="font-medium text-gray-900 mb-1 line-clamp-2">{book.book_title || 'Unknown Title'}</h4>
-                  <p className="text-sm text-gray-600 mb-2">by {book.book_author || 'Unknown Author'}</p>
-                  
+
+                  <h4 className="font-medium text-gray-900 mb-1 line-clamp-2">
+                    {book.book_title || 'Unknown Title'}
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-2">
+                    by {book.book_author || 'Unknown Author'}
+                  </p>
+
                   <div className="space-y-1 text-xs text-gray-600">
-                    <div>User: {book.user_name || 'Unknown'} ({book.user_usn || 'N/A'})</div>
+                    <div>
+                      User: {book.user_name || 'Unknown'} ({book.user_usn || 'N/A'})
+                    </div>
                     <div>Due: {formatDate(book.due_date)}</div>
                     <div className="text-red-600 font-medium">Fine: ₹{book.fine_amount || 0}</div>
                   </div>
@@ -618,7 +653,7 @@ const OverdueManagement: React.FC = () => {
                 type="text"
                 placeholder="Search by user name, USN, book title, or ISBN..."
                 value={searchTerm}
-                onChange={(e) => {
+                onChange={e => {
                   clearTimeout(searchTimeout);
                   const value = e.target.value;
                   searchTimeout = setTimeout(() => {
@@ -634,7 +669,7 @@ const OverdueManagement: React.FC = () => {
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
+                onChange={e => setFilterStatus(e.target.value as any)}
                 className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent appearance-none bg-white"
               >
                 <option value="all">All Fines</option>
@@ -654,7 +689,7 @@ const OverdueManagement: React.FC = () => {
             Fine Records ({filteredFines.length})
           </h3>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -677,7 +712,7 @@ const OverdueManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedFines.map((fine) => {
+              {paginatedFines.map(fine => {
                 if (!fine) return null;
                 return (
                   <tr key={fine.id} className="hover:bg-gray-50">
@@ -686,14 +721,22 @@ const OverdueManagement: React.FC = () => {
                         <div className="flex-shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-full bg-gradient-to-r from-red-500 to-orange-600 flex items-center justify-center">
                             <span className="text-sm font-medium text-white">
-                              {(fine.user_name || 'U').split(' ').map(n => n[0] || '').join('').substring(0, 2)}
+                              {(fine.user_name || 'U')
+                                .split(' ')
+                                .map(n => n[0] || '')
+                                .join('')
+                                .substring(0, 2)}
                             </span>
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{fine.user_name || 'Unknown User'}</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {fine.user_name || 'Unknown User'}
+                          </div>
                           <div className="text-sm text-gray-500">USN: {fine.user_usn || 'N/A'}</div>
-                          <div className="text-xs text-gray-400 mt-1">{fine.book_title || 'Unknown Book'}</div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {fine.book_title || 'Unknown Book'}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -714,11 +757,15 @@ const OverdueManagement: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-gray-900">₹{fine.fine_amount || 0}</div>
+                      <div className="text-sm font-bold text-gray-900">
+                        ₹{fine.fine_amount || 0}
+                      </div>
                       <div className="text-xs text-gray-500">₹{fine.fine_per_day || 0}/day</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(fine.status || 'unknown')}`}>
+                      <div
+                        className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(fine.status || 'unknown')}`}
+                      >
                         {getStatusIcon(fine.status || 'unknown')}
                         <span className="capitalize">{fine.status || 'unknown'}</span>
                       </div>
@@ -734,7 +781,7 @@ const OverdueManagement: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button 
+                      <button
                         onClick={() => handleViewDetails(fine)}
                         disabled={isOperationLoading}
                         className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
@@ -744,7 +791,7 @@ const OverdueManagement: React.FC = () => {
                       </button>
                       {fine.status === 'pending' && (
                         <>
-                          <button 
+                          <button
                             onClick={() => handleMarkAsPaid(fine)}
                             disabled={isOperationLoading}
                             className="text-emerald-600 hover:text-emerald-900 p-1 hover:bg-emerald-50 rounded disabled:opacity-50"
@@ -752,7 +799,7 @@ const OverdueManagement: React.FC = () => {
                           >
                             <CreditCard className="w-4 h-4" />
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleWaiveFine(fine)}
                             disabled={isOperationLoading}
                             className="text-purple-600 hover:text-purple-900 p-1 hover:bg-purple-50 rounded disabled:opacity-50"
@@ -769,7 +816,7 @@ const OverdueManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
-        
+
         {paginatedFines.length === 0 && filteredFines.length > 0 && (
           <div className="text-center py-12">
             <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -780,12 +827,12 @@ const OverdueManagement: React.FC = () => {
           <div className="text-center py-12">
             <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">
-              {searchTerm || filterStatus !== 'all' 
-                ? 'No fine records found matching your criteria.' 
+              {searchTerm || filterStatus !== 'all'
+                ? 'No fine records found matching your criteria.'
                 : 'No fine records available.'}
             </p>
             {(searchTerm || filterStatus !== 'all') && (
-              <button 
+              <button
                 onClick={() => {
                   setSearchTerm('');
                   setFilterStatus('all');
@@ -803,7 +850,9 @@ const OverdueManagement: React.FC = () => {
           <div className="px-6 py-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-700">
-                Showing {currentPage * itemsPerPage + 1} to {Math.min((currentPage + 1) * itemsPerPage, filteredFines.length)} of {filteredFines.length} fines
+                Showing {currentPage * itemsPerPage + 1} to{' '}
+                {Math.min((currentPage + 1) * itemsPerPage, filteredFines.length)} of{' '}
+                {filteredFines.length} fines
               </div>
               <div className="flex space-x-2">
                 <button
@@ -817,7 +866,11 @@ const OverdueManagement: React.FC = () => {
                   Page {currentPage + 1} of {Math.ceil(filteredFines.length / itemsPerPage)}
                 </span>
                 <button
-                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredFines.length / itemsPerPage) - 1, prev + 1))}
+                  onClick={() =>
+                    setCurrentPage(prev =>
+                      Math.min(Math.ceil(filteredFines.length / itemsPerPage) - 1, prev + 1)
+                    )
+                  }
                   disabled={currentPage >= Math.ceil(filteredFines.length / itemsPerPage) - 1}
                   className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -842,33 +895,62 @@ const OverdueManagement: React.FC = () => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-2">User Information</h4>
                 <div className="space-y-1 text-sm">
-                  <div><span className="text-gray-600">Name:</span> <span className="font-medium">{selectedFine.user_name || 'Unknown'}</span></div>
-                  <div><span className="text-gray-600">USN:</span> <span className="font-medium">{selectedFine.user_usn || 'N/A'}</span></div>
+                  <div>
+                    <span className="text-gray-600">Name:</span>{' '}
+                    <span className="font-medium">{selectedFine.user_name || 'Unknown'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">USN:</span>{' '}
+                    <span className="font-medium">{selectedFine.user_usn || 'N/A'}</span>
+                  </div>
                 </div>
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-2">Book Information</h4>
                 <div className="space-y-1 text-sm">
-                  <div><span className="text-gray-600">Title:</span> <span className="font-medium">{selectedFine.book_title || 'Unknown'}</span></div>
-                  <div><span className="text-gray-600">Author:</span> <span className="font-medium">{selectedFine.book_author || 'Unknown'}</span></div>
-                  <div><span className="text-gray-600">ISBN:</span> <span className="font-medium">{selectedFine.book_isbn || 'N/A'}</span></div>
+                  <div>
+                    <span className="text-gray-600">Title:</span>{' '}
+                    <span className="font-medium">{selectedFine.book_title || 'Unknown'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Author:</span>{' '}
+                    <span className="font-medium">{selectedFine.book_author || 'Unknown'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">ISBN:</span>{' '}
+                    <span className="font-medium">{selectedFine.book_isbn || 'N/A'}</span>
+                  </div>
                 </div>
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-2">Fine Details</h4>
                 <div className="space-y-1 text-sm">
-                  <div><span className="text-gray-600">Days Overdue:</span> <span className="font-medium text-red-600">{selectedFine.days_overdue || 0}</span></div>
-                  <div><span className="text-gray-600">Fine per Day:</span> <span className="font-medium">₹{selectedFine.fine_per_day || 0}</span></div>
-                  <div><span className="text-gray-600">Total Fine:</span> <span className="font-medium text-lg">₹{selectedFine.fine_amount || 0}</span></div>
-                  <div><span className="text-gray-600">Status:</span> 
-                    <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedFine.status || 'unknown')}`}>
+                  <div>
+                    <span className="text-gray-600">Days Overdue:</span>{' '}
+                    <span className="font-medium text-red-600">
+                      {selectedFine.days_overdue || 0}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Fine per Day:</span>{' '}
+                    <span className="font-medium">₹{selectedFine.fine_per_day || 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Total Fine:</span>{' '}
+                    <span className="font-medium text-lg">₹{selectedFine.fine_amount || 0}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Status:</span>
+                    <span
+                      className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedFine.status || 'unknown')}`}
+                    >
                       {selectedFine.status || 'unknown'}
                     </span>
                   </div>
@@ -878,16 +960,31 @@ const OverdueManagement: React.FC = () => {
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-2">Timeline</h4>
                 <div className="space-y-1 text-sm">
-                  <div><span className="text-gray-600">Issued:</span> <span className="font-medium">{formatDate(selectedFine.issued_date)}</span></div>
-                  <div><span className="text-gray-600">Due:</span> <span className="font-medium">{formatDate(selectedFine.due_date)}</span></div>
+                  <div>
+                    <span className="text-gray-600">Issued:</span>{' '}
+                    <span className="font-medium">{formatDate(selectedFine.issued_date)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Due:</span>{' '}
+                    <span className="font-medium">{formatDate(selectedFine.due_date)}</span>
+                  </div>
                   {selectedFine.return_date && (
-                    <div><span className="text-gray-600">Returned:</span> <span className="font-medium">{formatDate(selectedFine.return_date)}</span></div>
+                    <div>
+                      <span className="text-gray-600">Returned:</span>{' '}
+                      <span className="font-medium">{formatDate(selectedFine.return_date)}</span>
+                    </div>
                   )}
                   {selectedFine.paid_at && (
-                    <div><span className="text-gray-600">Paid:</span> <span className="font-medium">{formatDate(selectedFine.paid_at)}</span></div>
+                    <div>
+                      <span className="text-gray-600">Paid:</span>{' '}
+                      <span className="font-medium">{formatDate(selectedFine.paid_at)}</span>
+                    </div>
                   )}
                   {selectedFine.waived_at && (
-                    <div><span className="text-gray-600">Waived:</span> <span className="font-medium">{formatDate(selectedFine.waived_at)}</span></div>
+                    <div>
+                      <span className="text-gray-600">Waived:</span>{' '}
+                      <span className="font-medium">{formatDate(selectedFine.waived_at)}</span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -903,11 +1000,24 @@ const OverdueManagement: React.FC = () => {
                 <div className="bg-emerald-50 rounded-lg p-4">
                   <h4 className="font-medium text-gray-900 mb-2">Payment Information</h4>
                   <div className="space-y-1 text-sm">
-                    <div><span className="text-gray-600">Paid on:</span> <span className="font-medium">{formatDate(selectedFine.paid_at)}</span></div>
-                    <div><span className="text-gray-600">Payment Method:</span> <span className="font-medium capitalize">{selectedFine.payment_method || 'N/A'}</span></div>
-                    {selectedFine.notes && selectedFine.notes !== `Paid via ${selectedFine.payment_method} at library counter` && (
-                      <div><span className="text-gray-600">Payment Notes:</span> <span className="font-medium">{selectedFine.notes}</span></div>
-                    )}
+                    <div>
+                      <span className="text-gray-600">Paid on:</span>{' '}
+                      <span className="font-medium">{formatDate(selectedFine.paid_at)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Payment Method:</span>{' '}
+                      <span className="font-medium capitalize">
+                        {selectedFine.payment_method || 'N/A'}
+                      </span>
+                    </div>
+                    {selectedFine.notes &&
+                      selectedFine.notes !==
+                        `Paid via ${selectedFine.payment_method} at library counter` && (
+                        <div>
+                          <span className="text-gray-600">Payment Notes:</span>{' '}
+                          <span className="font-medium">{selectedFine.notes}</span>
+                        </div>
+                      )}
                   </div>
                 </div>
               )}
@@ -916,9 +1026,15 @@ const OverdueManagement: React.FC = () => {
                 <div className="bg-purple-50 rounded-lg p-4">
                   <h4 className="font-medium text-gray-900 mb-2">Waiver Information</h4>
                   <div className="space-y-1 text-sm">
-                    <div><span className="text-gray-600">Waived on:</span> <span className="font-medium">{formatDate(selectedFine.waived_at)}</span></div>
+                    <div>
+                      <span className="text-gray-600">Waived on:</span>{' '}
+                      <span className="font-medium">{formatDate(selectedFine.waived_at)}</span>
+                    </div>
                     {selectedFine.notes && selectedFine.notes !== 'Waived by administrator' && (
-                      <div><span className="text-gray-600">Waive Notes:</span> <span className="font-medium">{selectedFine.notes}</span></div>
+                      <div>
+                        <span className="text-gray-600">Waive Notes:</span>{' '}
+                        <span className="font-medium">{selectedFine.notes}</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -950,40 +1066,52 @@ const OverdueManagement: React.FC = () => {
                 <p className="text-gray-600">Mark this fine as paid</p>
               </div>
             </div>
-            
+
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <div className="space-y-2 text-sm">
-                <div><span className="text-gray-600">User:</span> <span className="font-medium">{selectedFine.user_name || 'Unknown'}</span></div>
-                <div><span className="text-gray-600">Book:</span> <span className="font-medium">{selectedFine.book_title || 'Unknown'}</span></div>
-                <div><span className="text-gray-600">Fine Amount:</span> <span className="font-medium text-lg">₹{selectedFine.fine_amount || 0}</span></div>
+                <div>
+                  <span className="text-gray-600">User:</span>{' '}
+                  <span className="font-medium">{selectedFine.user_name || 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Book:</span>{' '}
+                  <span className="font-medium">{selectedFine.book_title || 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Fine Amount:</span>{' '}
+                  <span className="font-medium text-lg">₹{selectedFine.fine_amount || 0}</span>
+                </div>
               </div>
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Method *
+              </label>
               <select
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
+                onChange={e => setPaymentMethod(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               >
                 <option value="cash">Cash</option>
                 <option value="card">Card</option>
-                <option value="online">Online</option>
                 <option value="upi">UPI</option>
               </select>
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Payment Notes (Optional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Payment Notes (Optional)
+              </label>
               <textarea
                 value={paymentNotes}
-                onChange={(e) => setPaymentNotes(e.target.value)}
+                onChange={e => setPaymentNotes(e.target.value)}
                 rows={2}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
                 placeholder="Add any notes about this payment..."
               />
             </div>
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => {
@@ -1021,27 +1149,40 @@ const OverdueManagement: React.FC = () => {
                 <p className="text-gray-600">Waive this fine with reason</p>
               </div>
             </div>
-            
+
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <div className="space-y-2 text-sm">
-                <div><span className="text-gray-600">User:</span> <span className="font-medium">{selectedFine.user_name || 'Unknown'}</span></div>
-                <div><span className="text-gray-600">Book:</span> <span className="font-medium">{selectedFine.book_title || 'Unknown'}</span></div>
-                <div><span className="text-gray-600">Fine Amount:</span> <span className="font-medium text-lg">₹{selectedFine.fine_amount || 0}</span></div>
+                <div>
+                  <span className="text-gray-600">User:</span>{' '}
+                  <span className="font-medium">{selectedFine.user_name || 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Book:</span>{' '}
+                  <span className="font-medium">{selectedFine.book_title || 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Fine Amount:</span>{' '}
+                  <span className="font-medium text-lg">₹{selectedFine.fine_amount || 0}</span>
+                </div>
               </div>
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Reason for waiving *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for waiving *
+              </label>
               <textarea
                 value={waiveReason}
-                onChange={(e) => setWaiveReason(e.target.value)}
+                onChange={e => setWaiveReason(e.target.value)}
                 rows={3}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                 placeholder="Enter reason for waiving this fine (minimum 5 characters)..."
               />
-              {formErrors.reason && <p className="mt-1 text-red-500 text-xs">{formErrors.reason}</p>}
+              {formErrors.reason && (
+                <p className="mt-1 text-red-500 text-xs">{formErrors.reason}</p>
+              )}
             </div>
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => {
@@ -1079,22 +1220,26 @@ const OverdueManagement: React.FC = () => {
                 <p className="text-gray-600">Calculate fines for all overdue books</p>
               </div>
             </div>
-            
+
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fine per day (₹) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fine per day (₹) *
+              </label>
               <input
                 type="number"
                 value={finePerDay}
-                onChange={(e) => setFinePerDay(parseFloat(e.target.value) || 10)}
+                onChange={e => setFinePerDay(parseFloat(e.target.value) || 10)}
                 min="0.5"
                 max="1000"
                 step="0.5"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 placeholder="Enter fine amount per day"
               />
-              <p className="text-xs text-gray-500 mt-1">This will be applied to all newly calculated fines (₹0.5 - ₹1000)</p>
+              <p className="text-xs text-gray-500 mt-1">
+                This will be applied to all newly calculated fines (₹0.5 - ₹1000)
+              </p>
             </div>
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => {
@@ -1118,39 +1263,41 @@ const OverdueManagement: React.FC = () => {
         </div>
       )}
 
-    {/* Enhanced Notification with close button */}
-    {notification && (
-      <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg max-w-md ${
-        notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-      }`}>
-        <div className="flex items-center justify-between space-x-3">
-          <div className="flex items-center space-x-2">
-            {notification.type === 'success' ? (
-              <CheckCircle className="w-5 h-5" />
-            ) : (
-              <AlertTriangle className="w-5 h-5" />
-            )}
-            <span className="text-sm font-medium">{notification.message}</span>
+      {/* Enhanced Notification with close button */}
+      {notification && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg max-w-md ${
+            notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+          }`}
+        >
+          <div className="flex items-center justify-between space-x-3">
+            <div className="flex items-center space-x-2">
+              {notification.type === 'success' ? (
+                <CheckCircle className="w-5 h-5" />
+              ) : (
+                <AlertTriangle className="w-5 h-5" />
+              )}
+              <span className="text-sm font-medium">{notification.message}</span>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="text-white hover:text-gray-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button 
-            onClick={() => setNotification(null)}
-            className="text-white hover:text-gray-200"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
-      </div>
-    )}
+      )}
 
-    {/* Loading Overlay */}
-    {isOperationLoading && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
-          <Loader className="w-6 h-6 animate-spin text-red-600" />
-          <span className="text-gray-700">Processing...</span>
+      {/* Loading Overlay */}
+      {isOperationLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <Loader className="w-6 h-6 animate-spin text-red-600" />
+            <span className="text-gray-700">Processing...</span>
+          </div>
         </div>
-      </div>
-    )}
+      )}
     </div>
   );
 };
