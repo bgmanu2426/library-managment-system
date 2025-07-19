@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import io
 import os
 import tempfile
@@ -217,7 +217,7 @@ async def with_timeout(coro, timeout_seconds: int = 60):
         )
 
 # Enhanced datetime parsing with comprehensive validation
-def parse_and_validate_datetime(date_param: Optional[datetime], param_name: str) -> Optional[datetime]:
+def parse_and_validate_datetime(date_param: Optional[str], param_name: str) -> Optional[datetime]:
     """Enhanced datetime parsing with comprehensive validation"""
     if date_param is None:
         return None
@@ -229,23 +229,38 @@ def parse_and_validate_datetime(date_param: Optional[datetime], param_name: str)
                 # Attempt to parse ISO 8601 string, including those with 'Z' for UTC
                 parsed_date = datetime.fromisoformat(date_param.replace('Z', '+00:00'))
             except ValueError:
-                raise ValueError(f"Invalid {param_name} format. Expected ISO 8601.")
+                try:
+                    # Fallback: try parsing as regular datetime string
+                    parsed_date = datetime.strptime(date_param, '%Y-%m-%dT%H:%M:%S.%fZ')
+                except ValueError:
+                    try:
+                        # Another fallback: basic ISO format
+                        parsed_date = datetime.strptime(date_param, '%Y-%m-%dT%H:%M:%SZ')
+                    except ValueError:
+                        raise ValueError(f"Invalid {param_name} format. Expected ISO 8601 format (e.g., '2024-01-01T00:00:00Z').")
         elif isinstance(date_param, datetime):
             parsed_date = date_param
         else:
             raise ValueError(f"Invalid {param_name} type. Must be datetime or string.")
 
-        # Convert to timezone-naive UTC for consistent comparison if it has tzinfo
+        # Convert timezone-aware dates to UTC, then make them naive for consistent handling
         if parsed_date.tzinfo:
-            parsed_date = parsed_date.astimezone(None) # Convert to local naive time
+            # Convert to UTC using built-in timezone handling
+            utc_date = parsed_date.astimezone(timezone.utc)
+            parsed_date = utc_date.replace(tzinfo=None)
         
-        # Validate date is not in future (handle timezone comparison)
-        comparison_date = parsed_date.replace(tzinfo=None) if parsed_date.tzinfo else parsed_date
-        if comparison_date > datetime.utcnow():
-            raise ValueError(f"{param_name} cannot be in the future")
+        # Validate date is not too far in the future (allow small buffer for timezone differences)
+        now_utc = datetime.utcnow()
+        # Allow up to 24 hours in the future to account for timezone differences
+        max_future_date = now_utc + timedelta(hours=24)
+        
+        if parsed_date > max_future_date:
+            raise ValueError(f"{param_name} cannot be more than 24 hours in the future")
 
         return parsed_date
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -285,8 +300,8 @@ def handle_report_error(error: Exception, operation: str, correlation_id: str) -
 
 @router.get("/user-activity")
 async def get_user_activity_report(
-    start_date: Optional[datetime] = Query(None, description="Start date for filtering"),
-    end_date: Optional[datetime] = Query(None, description="End date for filtering"),
+    start_date: Optional[str] = Query(None, description="Start date for filtering (ISO 8601 format)"),
+    end_date: Optional[str] = Query(None, description="End date for filtering (ISO 8601 format)"),
     user_id: Optional[int] = Query(None, description="Specific user ID"),
     session: Session = Depends(get_session),
     current_admin: User = Depends(get_current_admin)
@@ -441,8 +456,8 @@ async def get_user_activity_report(
 
 @router.get("/book-circulation")
 async def get_book_circulation_report(
-    start_date: Optional[datetime] = Query(None, description="Start date for filtering"),
-    end_date: Optional[datetime] = Query(None, description="End date for filtering"),
+    start_date: Optional[str] = Query(None, description="Start date for filtering (ISO 8601 format)"),
+    end_date: Optional[str] = Query(None, description="End date for filtering (ISO 8601 format)"),
     genre: Optional[str] = Query(None, description="Book genre filter"),
     session: Session = Depends(get_session),
     current_admin: User = Depends(get_current_admin)
@@ -620,8 +635,8 @@ async def get_book_circulation_report(
 
 @router.get("/overdue-summary")
 async def get_overdue_summary_report(
-    start_date: Optional[datetime] = Query(None, description="Start date for filtering"),
-    end_date: Optional[datetime] = Query(None, description="End date for filtering"),
+    start_date: Optional[str] = Query(None, description="Start date for filtering (ISO 8601 format)"),
+    end_date: Optional[str] = Query(None, description="End date for filtering (ISO 8601 format)"),
     session: Session = Depends(get_session),
     current_admin: User = Depends(get_current_admin)
 ):
@@ -707,6 +722,18 @@ async def get_overdue_summary_report(
             if fines is None:
                 api_logger.warning(f"[{correlation_id}] Fines query returned None result")
                 fines = []
+            
+            # If no fines exist but we have overdue transactions, calculate implied fines
+            if not fines and overdue_transactions:
+                logging_config.log_api_operation("No fines found, calculating implied fines from overdue transactions", correlation_id=correlation_id)
+                for transaction in overdue_transactions:
+                    if transaction and transaction.due_date:
+                        # Calculate implied fine based on days overdue
+                        days_overdue = (datetime.utcnow().replace(tzinfo=None) - transaction.due_date.replace(tzinfo=None)).days
+                        if days_overdue > 0:
+                            implied_fine_amount = days_overdue * 5.0  # ₹5 per day default
+                            total_pending_fines += implied_fine_amount
+                            logging_config.log_api_operation(f"Implied fine for transaction {transaction.id}: ₹{implied_fine_amount} ({days_overdue} days overdue)", correlation_id=correlation_id)
 
             fine_query_duration = time.time() - fine_query_start
             logging_config.log_performance(api_logger, "Fines query for summary", fine_query_duration, correlation_id)
@@ -754,10 +781,10 @@ async def get_overdue_summary_report(
                     for transaction in overdue_transactions:
                         try:
                             # Calculate days overdue if not explicitly available on transaction model
-                            if transaction and transaction.issued_date and transaction.expected_return_date:
+                            if transaction and transaction.issued_date and transaction.due_date:
                                 # Compare with current date if not returned, else with return_date
                                 compare_date = transaction.return_date.replace(tzinfo=None) if transaction.return_date else datetime.utcnow()
-                                expected_return = transaction.expected_return_date.replace(tzinfo=None)
+                                expected_return = transaction.due_date.replace(tzinfo=None)
 
                                 days = (compare_date - expected_return).days
                                 if days > 0: # Only count if actually overdue
@@ -856,9 +883,20 @@ async def get_inventory_status_report(
                 current_transactions = session.exec(select(Transaction.book_id).where(Transaction.status == "current")).all()
                 issued_book_ids = set(current_transactions)
                 api_logger.info(f"[{correlation_id}] Found {len(issued_book_ids)} currently issued books.")
+                logging_config.log_api_operation(f"Current transactions book IDs: {list(issued_book_ids)}", correlation_id=correlation_id)
             except Exception as e:
                 logging_config.log_error(api_logger, f"Error fetching current transactions for inventory: {str(e)}", correlation_id=correlation_id)
                 # Continue with issued_book_ids as empty set
+
+            # Also check overdue transactions
+            try:
+                overdue_transactions = session.exec(select(Transaction.book_id).where(Transaction.status == "overdue")).all()
+                overdue_book_ids = set(overdue_transactions)
+                issued_book_ids.update(overdue_book_ids)  # Add overdue books to issued count
+                api_logger.info(f"[{correlation_id}] Found {len(overdue_book_ids)} overdue books.")
+                logging_config.log_api_operation(f"Total issued (current + overdue) book IDs: {list(issued_book_ids)}", correlation_id=correlation_id)
+            except Exception as e:
+                logging_config.log_error(api_logger, f"Error fetching overdue transactions for inventory: {str(e)}", correlation_id=correlation_id)
 
             available_books = 0
             if all_books:
@@ -908,9 +946,8 @@ async def get_inventory_status_report(
                         shelf_name = shelf.name or f"Shelf {shelf_id}"
                         capacity = shelf.capacity or 0
                         
-                        # Dynamically calculate current books on shelf
-                        books_on_shelf = session.exec(select(Book).where(Book.shelf_id == shelf.id)).all()
-                        current_books = len(books_on_shelf) if books_on_shelf else 0
+                        # Use the current_books field from the shelf table
+                        current_books = shelf.current_books or 0
 
                         # Prevent division by zero
                         if capacity > 0:
@@ -967,8 +1004,8 @@ async def get_inventory_status_report(
 @router.get("/export/excel/{report_type}")
 async def export_excel_report(
     report_type: str,
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
+    start_date: Optional[str] = Query(None, description="Start date (ISO 8601 format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO 8601 format)"),
     user_id: Optional[int] = Query(None),
     genre: Optional[str] = Query(None),
     session: Session = Depends(get_session),
