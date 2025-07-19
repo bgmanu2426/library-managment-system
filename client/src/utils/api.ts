@@ -2001,10 +2001,11 @@ const isValidDate = (dateString: string): boolean => {
 };
 
 export const getInventoryStatusReport = async (token: string): Promise<InventoryStatusReport> => {
-  return apiRequest<InventoryStatusReport>(
+  const response = await apiRequest<{ inventory_status: InventoryStatusReport}>(
     getApiUrl(API_ENDPOINTS.INVENTORY_STATUS_REPORT),
     createAuthenticatedRequest(token)
   );
+  return response.inventory_status;
 };
 
 // export const exportReportExcel = async (

@@ -1,0 +1,102 @@
+# Library Management System - Development Docker Compose Configuration
+# Simplified setup for development with SQLite and hot-reload
+
+version: '3.8'
+
+services:
+  # FastAPI Server Service (Development)
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: library-server-dev
+    restart: unless-stopped
+    environment:
+      # Database Configuration (SQLite for development)
+      DATABASE_URL: sqlite:///./library.db
+      
+      # JWT Configuration
+      SECRET_KEY: dev-secret-key-not-for-production
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_DAYS: 7
+      
+      # Server Configuration
+      HOST: 0.0.0.0
+      PORT: 8000
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+      
+      # CORS Configuration
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173
+      
+      # Security Configuration (Relaxed for development)
+      BCRYPT_ROUNDS: 10
+      SESSION_TIMEOUT_MINUTES: 120
+      RATE_LIMIT_PER_MINUTE: 1000
+      
+      # Feature Flags
+      ENABLE_USER_REGISTRATION: true
+      ENABLE_EMAIL_NOTIFICATIONS: false
+      ENABLE_BOOK_RECOMMENDATIONS: true
+      ENABLE_ADVANCED_SEARCH: true
+      
+      # Development specific
+      ENABLE_DEBUG_LOGGING: true
+    volumes:
+      - ./server:/app:rw  # Mount source code for development
+      - server_logs_dev:/app/logs
+      - sqlite_data:/app/data
+    ports:
+      - "8000:8000"
+    networks:
+      - library-network-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # React Client Service (Development)
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: builder  # Use builder stage for development
+    container_name: library-client-dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000
+      - VITE_APP_ENV=development
+      - VITE_ENABLE_DEBUG_LOGGING=true
+    volumes:
+      - ./client:/app:rw  # Mount source code for development
+      - client_node_modules:/app/node_modules
+    ports:
+      - "3000:80"
+    networks:
+      - library-network-dev
+    depends_on:
+      - server
+    command: npm run dev -- --host 0.0.0.0 --port 80
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# Named Volumes for Development
+volumes:
+  server_logs_dev:
+    driver: local
+  sqlite_data:
+    driver: local
+  client_node_modules:
+    driver: local
+
+# Networks for Development
+networks:
+  library-network-dev:
+    driver: bridge
