@@ -118,6 +118,17 @@ export const validateApiUrl = (url: string): void => {
   }
 };
 
+// Helper function to clean malformed URLs (especially the :1 suffix issue)
+export const cleanApiUrl = (url: string): string => {
+  if (!url || typeof url !== 'string') {
+    return url;
+  }
+  
+  // Remove :1 suffix from URL parameters that might have been malformed
+  // This fixes the specific issue where URLs end up with dates like "2025-07-20T01:37:47.220Z:1"
+  return url.replace(/([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}%3A[0-9]{2}%3A[0-9]{2}\.[0-9]{3}Z):1/g, '$1');
+};
+
 export const validateReportUrl = (url: string, reportType: string): void => {
   validateApiUrl(url);
   
@@ -165,14 +176,15 @@ const apiRequest = async <T>(
   retries = 3,
   timeout = 20000
 ): Promise<T> => {
-  // Validate URL before making request
-  validateApiUrl(url);
+  // Clean and validate URL before making request
+  const cleanedUrl = cleanApiUrl(url);
+  validateApiUrl(cleanedUrl);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(cleanedUrl, {
       ...options,
       signal: controller.signal,
     });
@@ -1797,13 +1809,17 @@ export const getUserActivityReport = async (
       if (!isValidDate(startDate)) {
         throw new Error('Invalid start date format. Please use a valid date.');
       }
-      params.append('start_date', startDate);
+      // Clean up any malformed date strings (defensive fix for :1 suffix issue)
+      const cleanStartDate = startDate.replace(/:1$/, '');
+      params.append('start_date', cleanStartDate);
     }
     if (endDate) {
       if (!isValidDate(endDate)) {
         throw new Error('Invalid end date format. Please use a valid date.');
       }
-      params.append('end_date', endDate);
+      // Clean up any malformed date strings (defensive fix for :1 suffix issue)
+      const cleanEndDate = endDate.replace(/:1$/, '');
+      params.append('end_date', cleanEndDate);
     }
     if (userId && typeof userId === 'number' && userId > 0) {
       params.append('user_id', userId.toString());
@@ -1865,13 +1881,17 @@ export const getBookCirculationReport = async (
       if (!isValidDate(startDate)) {
         throw new Error('Invalid start date format. Please use a valid date.');
       }
-      params.append('start_date', startDate);
+      // Clean up any malformed date strings (defensive fix for :1 suffix issue)
+      const cleanStartDate = startDate.replace(/:1$/, '');
+      params.append('start_date', cleanStartDate);
     }
     if (endDate) {
       if (!isValidDate(endDate)) {
         throw new Error('Invalid end date format. Please use a valid date.');
       }
-      params.append('end_date', endDate);
+      // Clean up any malformed date strings (defensive fix for :1 suffix issue)
+      const cleanEndDate = endDate.replace(/:1$/, '');
+      params.append('end_date', cleanEndDate);
     }
     if (genre && typeof genre === 'string' && genre.trim()) {
       params.append('genre', genre.trim());
@@ -1942,10 +1962,14 @@ export const getOverdueSummaryReport = async (
 
     // Add date parameters (URLSearchParams handles encoding automatically)
     if (startDate) {
-      params.append('start_date', startDate);
+      // Clean up any malformed date strings (defensive fix for :1 suffix issue)
+      const cleanStartDate = startDate.replace(/:1$/, '');
+      params.append('start_date', cleanStartDate);
     }
     if (endDate) {
-      params.append('end_date', endDate);
+      // Clean up any malformed date strings (defensive fix for :1 suffix issue)
+      const cleanEndDate = endDate.replace(/:1$/, '');
+      params.append('end_date', cleanEndDate);
     }
 
     if (params.toString()) {
