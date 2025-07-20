@@ -720,4 +720,47 @@ const RackManagement: React.FC = () => {
                       </p>
                       <div className="mt-2 text-sm text-yellow-700">
                         <p>• Shelves: {getShelfCount(selectedRack.id)}</p>
-                        <p>• Books: {getTotalBooks(selectedRack.id)
+                        <p>• Books: {getTotalBooks(selectedRack.id)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 p-6 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedRack(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteRack}
+                  disabled={isOperationLoading}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isOperationLoading ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Delete Rack
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default RackManagement;

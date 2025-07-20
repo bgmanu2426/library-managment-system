@@ -9,6 +9,8 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import BookManagement from './components/admin/BookManagement';
 import UserManagement from './components/admin/UserManagement';
 import InventoryManagement from './components/admin/InventoryManagement';
+import RackManagement from './components/admin/RackManagement';
+import ShelfManagement from './components/admin/ShelfManagement';
 import Reports from './components/admin/Reports';
 import OverdueManagement from './components/admin/OverdueManagement';
 
@@ -39,6 +41,10 @@ const AppContent: React.FC = React.memo(() => {
           return <UserManagement />;
         case 'inventory':
           return <InventoryManagement />;
+        case 'racks':
+          return <RackManagement />;
+        case 'shelves':
+          return <ShelfManagement />;
         case 'reports':
           return <Reports />;
         case 'overdue':

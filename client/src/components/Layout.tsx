@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   Loader2,
   Bell,
+  Archive,
+  Layers3,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -61,6 +63,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     { id: 'books', label: 'Books', icon: BookOpen },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'inventory', label: 'Inventory', icon: Package },
+    { id: 'racks', label: 'Racks', icon: Archive },
+    { id: 'shelves', label: 'Shelves', icon: Layers3 },
     { id: 'overdue', label: 'Overdue & Fines', icon: AlertTriangle },
     { id: 'reports', label: 'Reports', icon: BarChart3 },
   ];
