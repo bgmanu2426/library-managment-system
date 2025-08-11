@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Package, 
-  Plus, 
-  Search, 
-  Filter,
+import {
+  Package,
+  Plus,
+  Search,
   Edit3,
   Trash2,
   Archive,
@@ -13,18 +12,10 @@ import {
   RefreshCw,
   Loader,
   CheckCircle,
-  BarChart3,
   TrendingUp,
   Database,
-  Activity
 } from 'lucide-react';
-import { 
-  getShelves, 
-  createShelf, 
-  updateShelf, 
-  deleteShelf,
-  getRacks
-} from '../../utils/api';
+import { getShelves, createShelf, updateShelf, deleteShelf, getRacks } from '../../utils/api';
 import { Shelf, Rack, ShelfCreatePayload, ShelfUpdatePayload } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,7 +29,7 @@ const ShelfManagement: React.FC = () => {
   const [newShelf, setNewShelf] = useState<ShelfCreatePayload>({
     name: '',
     rack_id: 0,
-    capacity: 0
+    capacity: 0,
   });
 
   const { user } = useAuth();
@@ -47,8 +38,11 @@ const ShelfManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -62,7 +56,7 @@ const ShelfManagement: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     if (!user) {
-      setError("Authentication required");
+      setError('Authentication required');
       setIsLoading(false);
       return;
     }
@@ -78,7 +72,7 @@ const ShelfManagement: React.FC = () => {
 
       const [shelvesResponse, racksResponse] = await Promise.all([
         getShelves(token),
-        getRacks(token)
+        getRacks(token),
       ]);
 
       setShelves(shelvesResponse.shelves || []);
@@ -116,21 +110,26 @@ const ShelfManagement: React.FC = () => {
   };
 
   const filteredShelves = shelves.filter(shelf => {
-    const matchesSearch = shelf.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         getRackName(shelf.rack_id).toLowerCase().includes(searchTerm.toLowerCase());
-    
+    const matchesSearch =
+      shelf.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getRackName(shelf.rack_id).toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesRack = filterRack === 'all' || shelf.rack_id === filterRack;
-    
+
     return matchesSearch && matchesRack;
   });
 
-  const validateShelfForm = (shelfData: ShelfCreatePayload | ShelfUpdatePayload): {[key: string]: string} => {
-    const errors: {[key: string]: string} = {};
-    
+  const validateShelfForm = (
+    shelfData: ShelfCreatePayload | ShelfUpdatePayload
+  ): { [key: string]: string } => {
+    const errors: { [key: string]: string } = {};
+
     if (!shelfData.name?.trim()) errors.name = 'Shelf name is required';
-    if (!shelfData.rack_id || shelfData.rack_id === 0) errors.rack_id = 'Rack selection is required';
-    if (!shelfData.capacity || shelfData.capacity <= 0) errors.capacity = 'Capacity must be greater than 0';
-    
+    if (!shelfData.rack_id || shelfData.rack_id === 0)
+      errors.rack_id = 'Rack selection is required';
+    if (!shelfData.capacity || shelfData.capacity <= 0)
+      errors.capacity = 'Capacity must be greater than 0';
+
     return errors;
   };
 
@@ -157,7 +156,7 @@ const ShelfManagement: React.FC = () => {
       setNewShelf({
         name: '',
         rack_id: 0,
-        capacity: 0
+        capacity: 0,
       });
       setFormErrors({});
       setShowAddModal(false);
@@ -185,7 +184,7 @@ const ShelfManagement: React.FC = () => {
     const shelfData: ShelfUpdatePayload = {
       name: selectedShelf.name,
       rack_id: selectedShelf.rack_id,
-      capacity: selectedShelf.capacity
+      capacity: selectedShelf.capacity,
     };
 
     const errors = validateShelfForm(shelfData);
@@ -302,9 +301,7 @@ const ShelfManagement: React.FC = () => {
                 <Package className="w-8 h-8 text-blue-600" />
                 Shelf Management
               </h1>
-              <p className="mt-2 text-gray-600">
-                Manage library shelves and their capacity
-              </p>
+              <p className="mt-2 text-gray-600">Manage library shelves and their capacity</p>
             </div>
             <div className="mt-4 sm:mt-0 flex gap-3">
               <button
@@ -387,20 +384,22 @@ const ShelfManagement: React.FC = () => {
                     type="text"
                     placeholder="Search shelves by name or rack..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={e => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
-              
+
               <div className="sm:w-48">
                 <select
                   value={filterRack}
-                  onChange={(e) => setFilterRack(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                  onChange={e =>
+                    setFilterRack(e.target.value === 'all' ? 'all' : parseInt(e.target.value))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">All Racks</option>
-                  {racks.map((rack) => (
+                  {racks.map(rack => (
                     <option key={rack.id} value={rack.id}>
                       {rack.name}
                     </option>
@@ -438,7 +437,7 @@ const ShelfManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredShelves.map((shelf) => {
+                {filteredShelves.map(shelf => {
                   const utilization = getUtilization(shelf);
                   const utilizationColor = getUtilizationColor(utilization);
                   const utilizationBgColor = getUtilizationBgColor(utilization);
@@ -459,7 +458,9 @@ const ShelfManagement: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <Archive className="w-4 h-4 text-gray-400 mr-2" />
-                          <span className="text-sm text-gray-900">{getRackName(shelf.rack_id)}</span>
+                          <span className="text-sm text-gray-900">
+                            {getRackName(shelf.rack_id)}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -509,10 +510,9 @@ const ShelfManagement: React.FC = () => {
               <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No shelves found</h3>
               <p className="text-gray-600 mb-4">
-                {searchTerm || filterRack !== 'all' 
-                  ? 'No shelves match your search criteria.' 
-                  : 'Get started by adding your first shelf.'
-                }
+                {searchTerm || filterRack !== 'all'
+                  ? 'No shelves match your search criteria.'
+                  : 'Get started by adding your first shelf.'}
               </p>
               {!searchTerm && filterRack === 'all' && (
                 <button
@@ -529,9 +529,11 @@ const ShelfManagement: React.FC = () => {
 
         {/* Notification */}
         {notification && (
-          <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-            notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-          }`}>
+          <div
+            className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+              notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+            }`}
+          >
             <div className="flex items-center gap-3">
               {notification.type === 'success' ? (
                 <CheckCircle className="w-5 h-5" />
@@ -559,17 +561,61 @@ const ShelfManagement: React.FC = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Capacity *
+                    Shelf Name *
                   </label>
+                  <input
+                    type="text"
+                    value={newShelf.name}
+                    onChange={e => setNewShelf({ ...newShelf, name: e.target.value })}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      formErrors.name ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Enter shelf name"
+                  />
+                  {formErrors.name && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.name}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Rack *</label>
+                  <select
+                    value={newShelf.rack_id}
+                    onChange={e =>
+                      setNewShelf({ ...newShelf, rack_id: parseInt(e.target.value) || 0 })
+                    }
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      formErrors.rack_id ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value={0}>Select a rack</option>
+                    {racks.map(rack => (
+                      <option key={rack.id} value={rack.id}>
+                        {rack.name}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.rack_id && (
+                    <p className="mt-1 text-xs text-red-600">{formErrors.rack_id}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Capacity *</label>
                   <input
                     type="number"
                     min="1"
-                    value={selectedShelf.capacity}
-                    onChange={(e) => setSelectedShelf({ ...selectedShelf, capacity: parseInt(e.target.value) || 0 })}
+                    value={newShelf.capacity}
+                    onChange={e =>
+                      setNewShelf({
+                        ...newShelf,
+                        capacity: parseInt(e.target.value) || 0,
+                      })
+                    }
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.capacity ? 'border-red-300' : 'border-gray-300'
                     }`}
@@ -579,42 +625,33 @@ const ShelfManagement: React.FC = () => {
                     <p className="mt-1 text-xs text-red-600">{formErrors.capacity}</p>
                   )}
                 </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
-                    <strong>Current books:</strong> {selectedShelf.current_books}
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Note: Capacity cannot be reduced below current book count.
-                  </p>
-                </div>
               </div>
 
               <div className="flex gap-3 p-6 border-t border-gray-200">
                 <button
                   onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedShelf(null);
+                    setShowAddModal(false);
                     setFormErrors({});
+                    setNewShelf({ name: '', rack_id: 0, capacity: 0 });
                   }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleUpdateShelf}
+                  onClick={handleAddShelf}
                   disabled={isOperationLoading}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isOperationLoading ? (
                     <>
                       <Loader className="w-4 h-4 animate-spin" />
-                      Updating...
+                      Creating...
                     </>
                   ) : (
                     <>
-                      <Edit3 className="w-4 h-4" />
-                      Update Shelf
+                      <Plus className="w-4 h-4" />
+                      Create Shelf
                     </>
                   )}
                 </button>
@@ -639,7 +676,7 @@ const ShelfManagement: React.FC = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6">
                 <div className="flex items-start gap-4">
                   <div className="p-2 bg-red-100 rounded-full">
@@ -650,11 +687,13 @@ const ShelfManagement: React.FC = () => {
                       Are you sure you want to delete this shelf?
                     </h4>
                     <p className="text-gray-600 mb-4">
-                      <strong>{selectedShelf.name}</strong> in rack <strong>{getRackName(selectedShelf.rack_id)}</strong>
+                      <strong>{selectedShelf.name}</strong> in rack{' '}
+                      <strong>{getRackName(selectedShelf.rack_id)}</strong>
                     </p>
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                       <p className="text-sm text-yellow-800">
-                        <strong>Warning:</strong> Make sure all books are moved from this shelf first.
+                        <strong>Warning:</strong> Make sure all books are moved from this shelf
+                        first.
                       </p>
                       <div className="mt-2 text-sm text-yellow-700">
                         <p>• Current books: {selectedShelf.current_books}</p>
@@ -714,7 +753,7 @@ const ShelfManagement: React.FC = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -723,7 +762,7 @@ const ShelfManagement: React.FC = () => {
                   <input
                     type="text"
                     value={selectedShelf.name}
-                    onChange={(e) => setSelectedShelf({ ...selectedShelf, name: e.target.value })}
+                    onChange={e => setSelectedShelf({ ...selectedShelf, name: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.name ? 'border-red-300' : 'border-gray-300'
                     }`}
@@ -735,18 +774,18 @@ const ShelfManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rack *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Rack *</label>
                   <select
                     value={selectedShelf.rack_id}
-                    onChange={(e) => setSelectedShelf({ ...selectedShelf, rack_id: parseInt(e.target.value) })}
+                    onChange={e =>
+                      setSelectedShelf({ ...selectedShelf, rack_id: parseInt(e.target.value) })
+                    }
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.rack_id ? 'border-red-300' : 'border-gray-300'
                     }`}
                   >
                     <option value={0}>Select a rack</option>
-                    {racks.map((rack) => (
+                    {racks.map(rack => (
                       <option key={rack.id} value={rack.id}>
                         {rack.name}
                       </option>
@@ -758,14 +797,17 @@ const ShelfManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Capacity *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Capacity *</label>
                   <input
                     type="number"
                     min="1"
                     value={selectedShelf.capacity}
-                    onChange={(e) => setSelectedShelf({ ...selectedShelf, capacity: parseInt(e.target.value) || 0 })}
+                    onChange={e =>
+                      setSelectedShelf({
+                        ...selectedShelf,
+                        capacity: parseInt(e.target.value) || 0,
+                      })
+                    }
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.capacity ? 'border-red-300' : 'border-gray-300'
                     }`}
@@ -835,7 +877,7 @@ const ShelfManagement: React.FC = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6">
                 <div className="flex items-start gap-4">
                   <div className="p-2 bg-red-100 rounded-full">
@@ -846,11 +888,13 @@ const ShelfManagement: React.FC = () => {
                       Are you sure you want to delete this shelf?
                     </h4>
                     <p className="text-gray-600 mb-4">
-                      <strong>{selectedShelf.name}</strong> in rack <strong>{getRackName(selectedShelf.rack_id)}</strong>
+                      <strong>{selectedShelf.name}</strong> in rack{' '}
+                      <strong>{getRackName(selectedShelf.rack_id)}</strong>
                     </p>
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                       <p className="text-sm text-yellow-800">
-                        <strong>Warning:</strong> Make sure all books are moved from this shelf first.
+                        <strong>Warning:</strong> Make sure all books are moved from this shelf
+                        first.
                       </p>
                       <div className="mt-2 text-sm text-yellow-700">
                         <p>• Current books: {selectedShelf.current_books}</p>

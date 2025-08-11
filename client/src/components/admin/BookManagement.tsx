@@ -26,8 +26,6 @@ import {
   getRacks,
   getShelves,
   getUsers,
-  issueBook,
-  returnBook,
   getFines,
 } from '../../utils/api';
 import {
@@ -37,8 +35,6 @@ import {
   BookCreatePayload,
   BookUpdatePayload,
   User as AppUser,
-  IssueBookPayload,
-  ReturnBookPayload,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -48,7 +44,6 @@ const BookManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showIssueModal, setShowIssueModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [newBook, setNewBook] = useState({
@@ -552,172 +547,6 @@ const BookManagement: React.FC = () => {
     }
   };
 
-  const handleReturnBook = (book: Book) => {
-    setSelectedBook(book);
-    setReturnData({
-      isbn: book.isbn,
-      userUsn: '',
-      condition: 'good',
-      notes: '',
-    });
-    setShowReturnModal(true);
-  };
-
-  const confirmReturnBook = async () => {
-    if (!selectedBook || !user) {
-      showNotification('error', 'Authentication required');
-      return;
-    }
-
-    if (!returnData.userUsn.trim()) {
-      showNotification('error', 'Student USN is required');
-      return;
-    }
-
-    setIsOperationLoading(true);
-    try {
-      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-
-      const payload: ReturnBookPayload = {
-        book_id: selectedBook.id,
-        user_id: users.find(u => u.usn === returnData.userUsn)?.id,
-        isbn: returnData.isbn,
-        user_usn: returnData.userUsn,
-        condition: returnData.condition,
-        notes: returnData.notes,
-      };
-
-      const response = await returnBook(token, payload);
-
-      // Handle enhanced success response with detailed information
-      let successMessage = response.message;
-      if (response.fine_amount && response.days_overdue) {
-        successMessage += ` A fine of ₹${response.fine_amount} has been applied for ${response.days_overdue} overdue days.`;
-      }
-
-      showNotification('success', successMessage);
-      setShowReturnModal(false);
-      setSelectedBook(null);
-      setReturnData({
-        isbn: '',
-        userUsn: '',
-        condition: 'good',
-        notes: '',
-      });
-      // Clear fine status cache for this book
-      setFineStatusCache(prev => {
-        const updated = { ...prev };
-        delete updated[selectedBook.id];
-        return updated;
-      });
-      handleRefresh();
-    } catch (err) {
-      console.error('Failed to return book:', err);
-      if (err instanceof Error) {
-        // Handle specific error scenarios from enhanced backend
-        if (
-          err.message.includes('not issued to user') ||
-          err.message.includes('not issued to this user')
-        ) {
-          showNotification(
-            'error',
-            'This book is not issued to the specified user. Please verify the correct user USN.'
-          );
-        } else if (err.message.includes('unpaid fine') || err.message.includes('pending fine')) {
-          showNotification(
-            'error',
-            'Cannot return this book. Please pay the pending fine first before returning the book.'
-          );
-        } else if (err.message.includes('not currently issued')) {
-          showNotification('error', 'This book is not currently issued and cannot be returned.');
-        } else if (err.message.includes('book not found')) {
-          showNotification('error', 'Book not found. Please refresh and try again.');
-        } else if (err.message.includes('user not found')) {
-          showNotification('error', 'User not found. Please verify the USN and try again.');
-        } else if (err.message.includes('No active transaction')) {
-          showNotification(
-            'error',
-            'No active transaction found for this book and user combination.'
-          );
-        } else if (err.message.includes('401')) {
-          showNotification('error', 'Authentication expired. Please log in again.');
-        } else if (err.message.includes('403')) {
-          showNotification('error', 'Access denied. You do not have permission to return books.');
-        } else if (err.message.includes('Network')) {
-          showNotification('error', 'Network error. Please check your connection and try again.');
-        } else {
-          showNotification('error', err.message);
-        }
-      } else {
-        showNotification('error', 'Failed to return book. Please try again.');
-      }
-    } finally {
-      setIsOperationLoading(false);
-    }
-  };
-
-  const handleIssueBook = async () => {
-    if (!user) {
-      showNotification('error', 'Authentication required');
-      return;
-    }
-
-    if (!issueData.isbn.trim() || !issueData.userUsn.trim() || !issueData.dueDate) {
-      showNotification('error', 'All fields are required for book issue');
-      return;
-    }
-
-    setIsOperationLoading(true);
-    try {
-      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-
-      const payload: IssueBookPayload = {
-        isbn: issueData.isbn.trim(),
-        user_usn: issueData.userUsn.trim(),
-        due_date: issueData.dueDate,
-      };
-
-      await issueBook(token, payload);
-      showNotification('success', 'Book issued successfully');
-      setIssueData({
-        isbn: '',
-        userUsn: '',
-        dueDate: '',
-      });
-      setShowIssueModal(false);
-      handleRefresh();
-    } catch (err) {
-      console.error('Failed to issue book:', err);
-      if (err instanceof Error) {
-        if (err.message.includes('not available')) {
-          showNotification('error', 'This book is not available for issue.');
-        } else if (err.message.includes('user not found')) {
-          showNotification('error', 'User not found. Please verify the USN.');
-        } else if (err.message.includes('book not found')) {
-          showNotification('error', 'Book not found. Please verify the ISBN.');
-        } else if (err.message.includes('401')) {
-          showNotification('error', 'Authentication expired. Please log in again.');
-        } else if (err.message.includes('403')) {
-          showNotification('error', 'Access denied. You do not have permission to issue books.');
-        } else if (err.message.includes('Network')) {
-          showNotification('error', 'Network error. Please check your connection and try again.');
-        } else {
-          showNotification('error', err.message);
-        }
-      } else {
-        showNotification('error', 'Failed to issue book. Please try again.');
-      }
-    } finally {
-      setIsOperationLoading(false);
-    }
-  };
-
   let searchTimeout: ReturnType<typeof setTimeout>;
 
   if (isLoading) {
@@ -813,7 +642,7 @@ const BookManagement: React.FC = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 mx-4">
             <button
               onClick={() => {
                 setShowAddModal(true);
@@ -824,16 +653,6 @@ const BookManagement: React.FC = () => {
             >
               <Plus className="w-4 h-4 md:w-5 md:h-5" />
               <span>Add Book</span>
-            </button>
-            <button
-              onClick={() => {
-                setShowIssueModal(true);
-                setIssueData({ isbn: '', userUsn: '', dueDate: '' });
-              }}
-              className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm md:text-base"
-            >
-              <User className="w-4 h-4 md:w-5 md:h-5" />
-              <span>Issue Book</span>
             </button>
           </div>
         </div>
@@ -1016,43 +835,6 @@ const BookManagement: React.FC = () => {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                          {!book.is_available && !fineStatusCache[book.id] && (
-                            <button
-                              onClick={() => handleReturnBook(book)}
-                              disabled={isOperationLoading || isCheckingFines}
-                              className="text-purple-600 hover:text-purple-900 p-1 hover:bg-purple-50 rounded disabled:opacity-50"
-                              title="Return Book"
-                            >
-                              <RotateCcw className="w-4 h-4" />
-                            </button>
-                          )}
-                          {!book.is_available && fineStatusCache[book.id] && (
-                            <div className="relative group">
-                              <button
-                                disabled
-                                className="text-gray-400 p-1 cursor-not-allowed"
-                                title="Cannot return - pending fines"
-                              >
-                                <RotateCcw className="w-4 h-4" />
-                              </button>
-                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-red-600 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                                Pay fine first
-                              </div>
-                            </div>
-                          )}
-                          {book.is_available && (
-                            <button
-                              onClick={() => {
-                                setIssueData({ isbn: book.isbn, userUsn: '', dueDate: '' });
-                                setShowIssueModal(true);
-                              }}
-                              disabled={isOperationLoading}
-                              className="text-green-600 hover:text-green-900 p-1 hover:bg-green-50 rounded disabled:opacity-50"
-                              title="Issue Book"
-                            >
-                              <User className="w-4 h-4" />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -1111,137 +893,6 @@ const BookManagement: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Return Book Modal */}
-      {showReturnModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 md:p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg md:text-xl font-bold text-gray-900">Return Book</h3>
-              <button
-                onClick={() => setShowReturnModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5 md:w-6 md:h-6" />
-              </button>
-            </div>
-
-            {selectedBook && (
-              <div className="bg-purple-50 rounded-lg p-4 mb-6">
-                <h4 className="font-medium text-purple-900 mb-2">Book Information</h4>
-                <div className="space-y-1 text-sm text-purple-800">
-                  <div>
-                    <span className="font-medium">Title:</span> {selectedBook.title}
-                  </div>
-                  <div>
-                    <span className="font-medium">Author:</span> {selectedBook.author}
-                  </div>
-                  <div>
-                    <span className="font-medium">ISBN:</span> {selectedBook.isbn}
-                  </div>
-                  {selectedBook.return_date && (
-                    <div>
-                      <span className="font-medium">Due Date:</span>{' '}
-                      {new Date(selectedBook.return_date).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Book ISBN</label>
-                <input
-                  type="text"
-                  value={returnData.isbn}
-                  onChange={e => setReturnData({ ...returnData, isbn: e.target.value })}
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm md:text-base"
-                  placeholder="Enter book ISBN"
-                  disabled={!!selectedBook}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Student USN</label>
-                <input
-                  type="text"
-                  value={returnData.userUsn}
-                  onChange={e => setReturnData({ ...returnData, userUsn: e.target.value })}
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm md:text-base"
-                  placeholder="Enter student USN"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Book Condition
-                </label>
-                <select
-                  value={returnData.condition}
-                  onChange={e =>
-                    setReturnData({
-                      ...returnData,
-                      condition: e.target.value as 'good' | 'damaged' | 'lost',
-                    })
-                  }
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm md:text-base"
-                >
-                  <option value="good">Good Condition</option>
-                  <option value="damaged">Damaged</option>
-                  <option value="lost">Lost</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notes (Optional)
-                </label>
-                <textarea
-                  value={returnData.notes}
-                  onChange={e => setReturnData({ ...returnData, notes: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm md:text-base"
-                  placeholder="Any additional notes about the return..."
-                />
-              </div>
-
-              {returnData.condition !== 'good' && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                  <div className="flex items-start space-x-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-amber-800">
-                      <p className="font-medium">Additional Action Required</p>
-                      <p className="mt-1">
-                        {returnData.condition === 'damaged'
-                          ? 'This book is marked as damaged. Additional fees may apply.'
-                          : 'This book is marked as lost. Replacement fees will be charged.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
-              <button
-                onClick={() => setShowReturnModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm md:text-base"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmReturnBook}
-                disabled={isOperationLoading}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm md:text-base disabled:opacity-50 flex items-center space-x-2"
-              >
-                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
-                <span>Process Return</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Add Book Modal */}
       {showAddModal && (
@@ -1534,69 +1185,6 @@ const BookManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Issue Book Modal */}
-      {showIssueModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 md:p-8 max-w-md w-full">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg md:text-xl font-bold text-gray-900">Issue Book</h3>
-              <button
-                onClick={() => setShowIssueModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5 md:w-6 md:h-6" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Book ISBN</label>
-                <input
-                  type="text"
-                  value={issueData.isbn}
-                  onChange={e => setIssueData({ ...issueData, isbn: e.target.value })}
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
-                  placeholder="Enter book ISBN"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Student USN</label>
-                <input
-                  type="text"
-                  value={issueData.userUsn}
-                  onChange={e => setIssueData({ ...issueData, userUsn: e.target.value })}
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
-                  placeholder="Enter student USN"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
-                <input
-                  type="date"
-                  value={issueData.dueDate}
-                  onChange={e => setIssueData({ ...issueData, dueDate: e.target.value })}
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
-              <button
-                onClick={() => setShowIssueModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm md:text-base"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleIssueBook}
-                disabled={isOperationLoading}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm md:text-base disabled:opacity-50 flex items-center space-x-2"
-              >
-                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
-                <span>Issue Book</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Notification */}
       {notification && (
         <div

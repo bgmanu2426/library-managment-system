@@ -1,108 +1,21 @@
-# Python cache files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Distribution / packaging
+__pycache__
+*.pyc
+*.pyo
+*.pyd
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
+.env*
+.venv
+venv
+build
+dist
 .coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
-.env
-
-# Environment variables (but keep .env.example)
-.env.local
-.env.development
-.env.production
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Logs (keep directory structure but exclude log files)
-*.log
-logs/*.log
-logs/*.log.*
-
-# Database files for development (in production, these should be external)
-# Uncomment the next line if you want to exclude the SQLite database
-# *.db
-
-# Documentation
-README.md
-*.md
-
-# Git
+.pytest_cache
+.mypy_cache
+*.sqlite
+*.db
+logs
+**/__pycache__/
 .git
 .gitignore
-
-# Docker
-Dockerfile
-.dockerignore
-compose.yaml
-
-# Temporary files
-*.tmp
-*.temp
-
-# Backup files
-*.bak
-*.backup
-
-# Server specific logs
-server.log
-nohup.out
-
-# Python bytecode cache
-*.pyc
+.vscode
+.env.example

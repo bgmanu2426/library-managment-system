@@ -523,7 +523,14 @@ export interface ApiErrorResponse {
 }
 
 export interface BookReturnValidationError {
-  error_code: 'BOOK_NOT_FOUND' | 'USER_NOT_FOUND' | 'BOOK_NOT_ISSUED' | 'UNPAID_FINES' | 'ALREADY_RETURNED' | 'INVALID_USER' | 'NO_ACTIVE_TRANSACTION';
+  error_code:
+    | 'BOOK_NOT_FOUND'
+    | 'USER_NOT_FOUND'
+    | 'BOOK_NOT_ISSUED'
+    | 'UNPAID_FINES'
+    | 'ALREADY_RETURNED'
+    | 'INVALID_USER'
+    | 'NO_ACTIVE_TRANSACTION';
   message: string;
   details?: string;
   user_name?: string;
@@ -577,7 +584,9 @@ export interface EnhancedApiErrorResponse extends ApiErrorResponse {
   documentation_url?: string;
 }
 
-export type EnhancedApiResponse<T> = ApiSuccessResponse<T> | { error: EnhancedApiErrorResponse; success: false };
+export type EnhancedApiResponse<T> =
+  | ApiSuccessResponse<T>
+  | { error: EnhancedApiErrorResponse; success: false };
 
 // Auth context interface
 
@@ -762,3 +771,4 @@ export interface ModalProps {
   title: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+}

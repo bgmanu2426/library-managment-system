@@ -1,0 +1,15 @@
+# Global ignores for root context builds (if any)
+.git
+.vscode
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+node_modules
+**/node_modules
+**/dist
+**/build
+**/.DS_Store
+.env
+.env.*
+server/logs

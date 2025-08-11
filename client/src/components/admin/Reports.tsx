@@ -25,7 +25,6 @@ import {
   getBookCirculationReport,
   getOverdueSummaryReport,
   getInventoryStatusReport,
-
 } from '../../utils/api';
 import {
   UserActivityReport,
@@ -119,14 +118,15 @@ const Reports: React.FC = () => {
             dateParams.end_date,
             genreFilter || undefined
           ).catch(handleReportError('Book Circulation Report')),
-          getOverdueSummaryReport(token, dateParams.start_date, dateParams.end_date)
-            .catch(handleReportError('Overdue Summary Report')),
+          getOverdueSummaryReport(token, dateParams.start_date, dateParams.end_date).catch(
+            handleReportError('Overdue Summary Report')
+          ),
           getInventoryStatusReport(token).catch(handleReportError('Inventory Status Report')),
         ]);
 
         setUserActivityData(userActivity?.user_activity_report || []);
         setBookCirculationData(bookCirculation?.book_circulation_report || []);
-        
+
         // Set overdue summary with fallback data
         if (overdueSummary?.overdue_summary) {
           console.log('📊 Overdue Summary - Using API data:', overdueSummary.overdue_summary);
@@ -139,10 +139,10 @@ const Reports: React.FC = () => {
             total_pending_fines: 150.0,
             total_paid_fines: 75.0,
             total_waived_fines: 25.0,
-            average_overdue_days: 8.5
+            average_overdue_days: 8.5,
           });
         }
-        
+
         // Set inventory status with fallback data
         if (inventoryStatus?.inventory_status) {
           console.log('📦 Inventory Status - Using API data:', inventoryStatus.inventory_status);
@@ -157,12 +157,42 @@ const Reports: React.FC = () => {
             total_racks: 4,
             total_shelves: 9,
             shelf_utilization: [
-              { shelf_id: 1, shelf_name: 'Programming Fundamentals', capacity: 50, current_books: 37, utilization_percentage: 74 },
-              { shelf_id: 2, shelf_name: 'Data Structures', capacity: 40, current_books: 32, utilization_percentage: 80 },
-              { shelf_id: 3, shelf_name: 'Web Development', capacity: 35, current_books: 28, utilization_percentage: 80 },
-              { shelf_id: 4, shelf_name: 'Calculus', capacity: 30, current_books: 18, utilization_percentage: 60 },
-              { shelf_id: 5, shelf_name: 'Linear Algebra', capacity: 25, current_books: 15, utilization_percentage: 60 }
-            ]
+              {
+                shelf_id: 1,
+                shelf_name: 'Programming Fundamentals',
+                capacity: 50,
+                current_books: 37,
+                utilization_percentage: 74,
+              },
+              {
+                shelf_id: 2,
+                shelf_name: 'Data Structures',
+                capacity: 40,
+                current_books: 32,
+                utilization_percentage: 80,
+              },
+              {
+                shelf_id: 3,
+                shelf_name: 'Web Development',
+                capacity: 35,
+                current_books: 28,
+                utilization_percentage: 80,
+              },
+              {
+                shelf_id: 4,
+                shelf_name: 'Calculus',
+                capacity: 30,
+                current_books: 18,
+                utilization_percentage: 60,
+              },
+              {
+                shelf_id: 5,
+                shelf_name: 'Linear Algebra',
+                capacity: 25,
+                current_books: 15,
+                utilization_percentage: 60,
+              },
+            ],
           });
         }
 
@@ -201,15 +231,19 @@ const Reports: React.FC = () => {
 
   const handleReportError = (reportName: string) => (error: any) => {
     console.error(`Failed to fetch ${reportName}:`, error);
-    
+
     if (error instanceof Error) {
       if (error.message.includes('400') || error.message.includes('Bad Request')) {
-        throw new Error(`${reportName} failed: Invalid parameters. Please check your date range and filter settings.`);
+        throw new Error(
+          `${reportName} failed: Invalid parameters. Please check your date range and filter settings.`
+        );
       } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
-        throw new Error(`${reportName} temporarily unavailable. The report service may be under maintenance.`);
+        throw new Error(
+          `${reportName} temporarily unavailable. The report service may be under maintenance.`
+        );
       }
     }
-    
+
     throw error;
   };
 
@@ -217,28 +251,59 @@ const Reports: React.FC = () => {
     if (err instanceof Error) {
       if (err.message.includes('401') || err.message.includes('Authentication')) {
         setError('Your session has expired. Please log in again to access reports.');
-        showNotification('error', 'Authentication expired', 'Please refresh the page and log in again.');
+        showNotification(
+          'error',
+          'Authentication expired',
+          'Please refresh the page and log in again.'
+        );
       } else if (err.message.includes('403')) {
         setError('Access denied. You do not have permission to view reports.');
-        showNotification('error', 'Access denied', 'Contact your administrator for report access permissions.');
+        showNotification(
+          'error',
+          'Access denied',
+          'Contact your administrator for report access permissions.'
+        );
       } else if (err.message.includes('400') || err.message.includes('Bad Request')) {
         setError('Invalid report parameters. Please check your date range and filter settings.');
-        showNotification('error', 'Invalid parameters', 'Verify your date range is not too large and filters are properly formatted.');
+        showNotification(
+          'error',
+          'Invalid parameters',
+          'Verify your date range is not too large and filters are properly formatted.'
+        );
       } else if (err.message.includes('405') || err.message.includes('Method Not Allowed')) {
         setError('Report service temporarily unavailable. Please try again later.');
-        showNotification('error', 'Service unavailable', 'The report generation service may be under maintenance. Try refreshing the page.');
+        showNotification(
+          'error',
+          'Service unavailable',
+          'The report generation service may be under maintenance. Try refreshing the page.'
+        );
       } else if (err.message.includes('500')) {
         setError('Server error occurred while loading reports. Please try again in a few moments.');
-        showNotification('error', 'Server error', 'The server encountered an issue. Wait a moment and try refreshing.');
+        showNotification(
+          'error',
+          'Server error',
+          'The server encountered an issue. Wait a moment and try refreshing.'
+        );
       } else if (err.message.includes('timeout') || err.message.includes('network')) {
         setError('Network error. Please check your connection and try again.');
         showNotification('error', 'Network error', 'Check your internet connection and try again.');
-      } else if (err.message.includes('Malformed URL') || err.message.includes('Invalid report request')) {
+      } else if (
+        err.message.includes('Malformed URL') ||
+        err.message.includes('Invalid report request')
+      ) {
         setError('Invalid report request detected. Please refresh the page and try again.');
-        showNotification('error', 'Invalid request', 'Please refresh the page to reset the report parameters.');
+        showNotification(
+          'error',
+          'Invalid request',
+          'Please refresh the page to reset the report parameters.'
+        );
       } else {
         setError(err.message || 'Failed to load report data. Please refresh and try again.');
-        showNotification('error', 'Report loading failed', err.message || 'An unexpected error occurred.');
+        showNotification(
+          'error',
+          'Report loading failed',
+          err.message || 'An unexpected error occurred.'
+        );
       }
     } else {
       setError('An unexpected error occurred while loading reports.');
@@ -257,12 +322,12 @@ const Reports: React.FC = () => {
       if (!dateRange.end_date) {
         errors.end_date = 'End date is required for custom range';
       }
-      
+
       if (dateRange.start_date && dateRange.end_date) {
         const startDate = new Date(dateRange.start_date);
         const endDate = new Date(dateRange.end_date);
         const now = new Date();
-        
+
         if (startDate > endDate) {
           errors.date_range = 'Start date must be before end date';
         } else if (startDate > now) {
@@ -332,14 +397,22 @@ const Reports: React.FC = () => {
     return { start_date: startDate, end_date: endDate };
   };
 
-  const showNotification = (type: 'success' | 'error' | 'warning' | 'info', message: string, details?: string) => {
+  const showNotification = (
+    type: 'success' | 'error' | 'warning' | 'info',
+    message: string,
+    details?: string
+  ) => {
     setNotification({ type, message, details });
     setTimeout(() => setNotification(null), 8000); // Increased timeout for detailed messages
   };
 
   const handleRefresh = () => {
     if (isLoading || isOperationLoading || isRetrying) {
-      showNotification('warning', 'Operation in progress', 'Please wait for the current operation to complete.');
+      showNotification(
+        'warning',
+        'Operation in progress',
+        'Please wait for the current operation to complete.'
+      );
       return;
     }
     setRefreshKey(prev => prev + 1);
@@ -347,7 +420,11 @@ const Reports: React.FC = () => {
 
   const handleRetryWithBackoff = async (operation: () => Promise<void>, operationName: string) => {
     if (retryCount >= maxRetries) {
-      showNotification('error', `${operationName} failed after ${maxRetries} attempts`, 'Please check your connection and try again later.');
+      showNotification(
+        'error',
+        `${operationName} failed after ${maxRetries} attempts`,
+        'Please check your connection and try again later.'
+      );
       setIsRetrying(false);
       setLastFailedOperation(operationName);
       return;
@@ -356,31 +433,41 @@ const Reports: React.FC = () => {
     setIsRetrying(true);
     setLastFailedOperation(operationName);
     const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
-    
-    showNotification('info', `Retrying ${operationName}...`, `Attempt ${retryCount + 1} of ${maxRetries}. Waiting ${delay / 1000} seconds.`);
-    
+
+    showNotification(
+      'info',
+      `Retrying ${operationName}...`,
+      `Attempt ${retryCount + 1} of ${maxRetries}. Waiting ${delay / 1000} seconds.`
+    );
+
     setTimeout(async () => {
       try {
         setRetryCount(prev => prev + 1);
         await operation();
         setRetryCount(0); // Reset on success
         setLastFailedOperation(null);
-        showNotification('success', `${operationName} completed successfully`, 'The operation was completed after retry.');
+        showNotification(
+          'success',
+          `${operationName} completed successfully`,
+          'The operation was completed after retry.'
+        );
         setIsRetrying(false);
       } catch (error) {
         console.error(`Retry ${retryCount + 1} failed for ${operationName}:`, error);
         if (retryCount + 1 < maxRetries) {
           await handleRetryWithBackoff(operation, operationName);
         } else {
-          showNotification('error', `${operationName} failed after ${maxRetries} attempts`, 'Please try again later or contact support.');
+          showNotification(
+            'error',
+            `${operationName} failed after ${maxRetries} attempts`,
+            'Please try again later or contact support.'
+          );
           setIsRetrying(false);
           setLastFailedOperation(operationName);
         }
       }
     }, delay);
   };
-
-
 
   // CSV Export Functions
   const exportUserActivityToCSV = () => {
@@ -389,18 +476,28 @@ const Reports: React.FC = () => {
       return;
     }
 
-    const headers = ['User Name', 'USN', 'Total Books Borrowed', 'Current Books', 'Overdue Books', 'Total Fines', 'Last Activity'];
+    const headers = [
+      'User Name',
+      'USN',
+      'Total Books Borrowed',
+      'Current Books',
+      'Overdue Books',
+      'Total Fines',
+      'Last Activity',
+    ];
     const csvContent = [
       headers.join(','),
-      ...userActivityData.map(user => [
-        `"${user.user_name}"`,
-        user.user_usn,
-        user.total_books_borrowed,
-        user.current_books,
-        user.overdue_books,
-        user.total_fines,
-        user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'
-      ].join(','))
+      ...userActivityData.map(user =>
+        [
+          `"${user.user_name}"`,
+          user.user_usn,
+          user.total_books_borrowed,
+          user.current_books,
+          user.overdue_books,
+          user.total_fines,
+          user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A',
+        ].join(',')
+      ),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -412,7 +509,11 @@ const Reports: React.FC = () => {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-    showNotification('success', 'CSV exported successfully', 'User activity report has been downloaded.');
+    showNotification(
+      'success',
+      'CSV exported successfully',
+      'User activity report has been downloaded.'
+    );
   };
 
   const exportBookCirculationToCSV = () => {
@@ -421,18 +522,28 @@ const Reports: React.FC = () => {
       return;
     }
 
-    const headers = ['Book Title', 'Author', 'ISBN', 'Total Issues', 'Current Status', 'Last Issued', 'Total Days Borrowed'];
+    const headers = [
+      'Book Title',
+      'Author',
+      'ISBN',
+      'Total Issues',
+      'Current Status',
+      'Last Issued',
+      'Total Days Borrowed',
+    ];
     const csvContent = [
       headers.join(','),
-      ...bookCirculationData.map(book => [
-        `"${book.book_title}"`,
-        `"${book.book_author}"`,
-        book.book_isbn,
-        book.total_issues,
-        book.current_status,
-        book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
-        book.total_days_borrowed
-      ].join(','))
+      ...bookCirculationData.map(book =>
+        [
+          `"${book.book_title}"`,
+          `"${book.book_author}"`,
+          book.book_isbn,
+          book.total_issues,
+          book.current_status,
+          book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
+          book.total_days_borrowed,
+        ].join(',')
+      ),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -444,7 +555,11 @@ const Reports: React.FC = () => {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-    showNotification('success', 'CSV exported successfully', 'Book circulation report has been downloaded.');
+    showNotification(
+      'success',
+      'CSV exported successfully',
+      'Book circulation report has been downloaded.'
+    );
   };
 
   const exportOverdueSummaryToCSV = () => {
@@ -460,7 +575,7 @@ const Reports: React.FC = () => {
       `"Total Pending Fines","₹${overdueSummaryData.total_pending_fines}"`,
       `"Total Paid Fines","₹${overdueSummaryData.total_paid_fines}"`,
       `"Total Waived Fines","₹${overdueSummaryData.total_waived_fines}"`,
-      `"Average Overdue Days",${(overdueSummaryData.average_overdue_days || 0).toFixed(2)}`
+      `"Average Overdue Days",${(overdueSummaryData.average_overdue_days || 0).toFixed(2)}`,
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -472,7 +587,11 @@ const Reports: React.FC = () => {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-    showNotification('success', 'CSV exported successfully', 'Overdue summary report has been downloaded.');
+    showNotification(
+      'success',
+      'CSV exported successfully',
+      'Overdue summary report has been downloaded.'
+    );
   };
 
   const exportInventoryStatusToCSV = () => {
@@ -491,17 +610,19 @@ const Reports: React.FC = () => {
       `"Total Shelves",${inventoryStatusData.total_shelves || 0}`,
       '',
       '"Shelf Utilization:"',
-      '"Shelf Name","Capacity","Current Books","Utilization %"'
+      '"Shelf Name","Capacity","Current Books","Utilization %"',
     ];
-    
+
     if (inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0) {
       inventoryStatusData.shelf_utilization.forEach(shelf => {
-        csvSections.push(`"${shelf.shelf_name || 'N/A'}",${shelf.capacity || 0},${shelf.current_books || 0},${(shelf.utilization_percentage || 0).toFixed(1)}%`);
+        csvSections.push(
+          `"${shelf.shelf_name || 'N/A'}",${shelf.capacity || 0},${shelf.current_books || 0},${(shelf.utilization_percentage || 0).toFixed(1)}%`
+        );
       });
     } else {
       csvSections.push('"No shelf utilization data available"');
     }
-    
+
     const csvContent = csvSections.join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -513,34 +634,46 @@ const Reports: React.FC = () => {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-    showNotification('success', 'CSV exported successfully', 'Inventory status report has been downloaded.');
+    showNotification(
+      'success',
+      'CSV exported successfully',
+      'Inventory status report has been downloaded.'
+    );
   };
 
   const exportAllReportsToCSV = () => {
     try {
       const currentDate = new Date().toISOString().split('T')[0];
       const csvSections = [];
-      
+
       // Header section
       csvSections.push('"Library Management System - Complete Report"');
-      csvSections.push(`"Generated Date","${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}"`);
-      csvSections.push(`"Date Range","${customDateRange.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}"`);
+      csvSections.push(
+        `"Generated Date","${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}"`
+      );
+      csvSections.push(
+        `"Date Range","${customDateRange.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}"`
+      );
       csvSections.push('');
-      
+
       // User Activity Section
       if (userActivityData && userActivityData.length > 0) {
         csvSections.push('"=== USER ACTIVITY REPORT ==="');
-        csvSections.push('"User Name","USN","Total Books Borrowed","Current Books","Overdue Books","Total Fines","Last Activity"');
+        csvSections.push(
+          '"User Name","USN","Total Books Borrowed","Current Books","Overdue Books","Total Fines","Last Activity"'
+        );
         userActivityData.forEach(user => {
-          csvSections.push([
-            `"${user.user_name || 'N/A'}"`,
-            user.user_usn || 'N/A',
-            user.total_books_borrowed || 0,
-            user.current_books || 0,
-            user.overdue_books || 0,
-            user.total_fines || 0,
-            user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'
-          ].join(','));
+          csvSections.push(
+            [
+              `"${user.user_name || 'N/A'}"`,
+              user.user_usn || 'N/A',
+              user.total_books_borrowed || 0,
+              user.current_books || 0,
+              user.overdue_books || 0,
+              user.total_fines || 0,
+              user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A',
+            ].join(',')
+          );
         });
         csvSections.push('');
       } else {
@@ -548,21 +681,25 @@ const Reports: React.FC = () => {
         csvSections.push('"No user activity data available"');
         csvSections.push('');
       }
-      
+
       // Book Circulation Section
       if (bookCirculationData && bookCirculationData.length > 0) {
         csvSections.push('"=== BOOK CIRCULATION REPORT ==="');
-        csvSections.push('"Book Title","Author","ISBN","Total Issues","Current Status","Last Issued","Total Days Borrowed"');
+        csvSections.push(
+          '"Book Title","Author","ISBN","Total Issues","Current Status","Last Issued","Total Days Borrowed"'
+        );
         bookCirculationData.forEach(book => {
-          csvSections.push([
-            `"${book.book_title || 'N/A'}"`,
-            `"${book.book_author || 'N/A'}"`,
-            book.book_isbn || 'N/A',
-            book.total_issues || 0,
-            book.current_status || 'N/A',
-            book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
-            book.total_days_borrowed || 0
-          ].join(','));
+          csvSections.push(
+            [
+              `"${book.book_title || 'N/A'}"`,
+              `"${book.book_author || 'N/A'}"`,
+              book.book_isbn || 'N/A',
+              book.total_issues || 0,
+              book.current_status || 'N/A',
+              book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
+              book.total_days_borrowed || 0,
+            ].join(',')
+          );
         });
         csvSections.push('');
       } else {
@@ -570,7 +707,7 @@ const Reports: React.FC = () => {
         csvSections.push('"No book circulation data available"');
         csvSections.push('');
       }
-      
+
       // Overdue Summary Section
       if (overdueSummaryData) {
         csvSections.push('"=== OVERDUE SUMMARY REPORT ==="');
@@ -579,14 +716,16 @@ const Reports: React.FC = () => {
         csvSections.push(`"Total Pending Fines","₹${overdueSummaryData.total_pending_fines || 0}"`);
         csvSections.push(`"Total Paid Fines","₹${overdueSummaryData.total_paid_fines || 0}"`);
         csvSections.push(`"Total Waived Fines","₹${overdueSummaryData.total_waived_fines || 0}"`);
-        csvSections.push(`"Average Overdue Days",${(overdueSummaryData.average_overdue_days || 0).toFixed(2)}`);
+        csvSections.push(
+          `"Average Overdue Days",${(overdueSummaryData.average_overdue_days || 0).toFixed(2)}`
+        );
         csvSections.push('');
       } else {
         csvSections.push('"=== OVERDUE SUMMARY REPORT ==="');
         csvSections.push('"No overdue summary data available"');
         csvSections.push('');
       }
-      
+
       // Inventory Status Section
       if (inventoryStatusData) {
         csvSections.push('"=== INVENTORY STATUS REPORT ==="');
@@ -597,12 +736,17 @@ const Reports: React.FC = () => {
         csvSections.push(`"Total Racks",${inventoryStatusData.total_racks || 0}`);
         csvSections.push(`"Total Shelves",${inventoryStatusData.total_shelves || 0}`);
         csvSections.push('');
-        
-        if (inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0) {
+
+        if (
+          inventoryStatusData.shelf_utilization &&
+          inventoryStatusData.shelf_utilization.length > 0
+        ) {
           csvSections.push('"=== SHELF UTILIZATION ==="');
           csvSections.push('"Shelf Name","Capacity","Current Books","Utilization %"');
           inventoryStatusData.shelf_utilization.forEach(shelf => {
-            csvSections.push(`"${shelf.shelf_name || 'N/A'}",${shelf.capacity || 0},${shelf.current_books || 0},${(shelf.utilization_percentage || 0).toFixed(1)}%`);
+            csvSections.push(
+              `"${shelf.shelf_name || 'N/A'}",${shelf.capacity || 0},${shelf.current_books || 0},${(shelf.utilization_percentage || 0).toFixed(1)}%`
+            );
           });
         }
       } else {
@@ -610,7 +754,7 @@ const Reports: React.FC = () => {
         csvSections.push('"No inventory status data available"');
         csvSections.push('');
       }
-      
+
       const csvContent = csvSections.join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
@@ -621,7 +765,11 @@ const Reports: React.FC = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      showNotification('success', 'All Reports CSV exported successfully', 'Complete report has been downloaded.');
+      showNotification(
+        'success',
+        'All Reports CSV exported successfully',
+        'Complete report has been downloaded.'
+      );
     } catch (error) {
       console.error('CSV export error:', error);
       showNotification('error', 'CSV export failed', 'Unable to generate CSV. Please try again.');
@@ -635,13 +783,17 @@ const Reports: React.FC = () => {
       const hasBookData = bookCirculationData && bookCirculationData.length > 0;
       const hasOverdueData = overdueSummaryData !== null;
       const hasInventoryData = inventoryStatusData !== null;
-      
+
       if (!hasUserData && !hasBookData && !hasOverdueData && !hasInventoryData) {
-        showNotification('warning', 'No data to export', 'Please wait for reports to load before exporting.');
+        showNotification(
+          'warning',
+          'No data to export',
+          'Please wait for reports to load before exporting.'
+        );
         return;
       }
     }
-    
+
     switch (reportType) {
       case 'user-activity':
         exportUserActivityToCSV();
@@ -659,7 +811,11 @@ const Reports: React.FC = () => {
         exportAllReportsToCSV();
         break;
       default:
-        showNotification('error', 'Export not supported', 'CSV export is not supported for this report type.');
+        showNotification(
+          'error',
+          'Export not supported',
+          'CSV export is not supported for this report type.'
+        );
     }
   };
 
@@ -672,50 +828,72 @@ const Reports: React.FC = () => {
         const hasBookData = bookCirculationData && bookCirculationData.length > 0;
         const hasOverdueData = overdueSummaryData !== null;
         const hasInventoryData = inventoryStatusData !== null;
-        
+
         if (!hasUserData && !hasBookData && !hasOverdueData && !hasInventoryData) {
-          showNotification('warning', 'No data to export', 'Please wait for reports to load before exporting.');
+          showNotification(
+            'warning',
+            'No data to export',
+            'Please wait for reports to load before exporting.'
+          );
           return;
         }
       }
-      
+
       // Dynamic import to reduce bundle size
       const { jsPDF } = await import('jspdf');
       const { default: autoTable } = await import('jspdf-autotable');
-      
+
       const doc = new jsPDF();
       const currentDate = new Date();
-      
+
       // Header
       doc.setFillColor(59, 130, 246);
       doc.rect(0, 0, 210, 40, 'F');
-      
+
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
       doc.text('Library Management System', 14, 20);
-      
+
       doc.setFontSize(14);
       doc.text('Report Export', 14, 30);
-      
+
       // Report Info
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(10);
-      doc.text(`Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1).replace('-', ' ')}`, 14, 50);
-      doc.text(`Generated: ${currentDate.toLocaleDateString()} ${currentDate.toLocaleTimeString()}`, 14, 57);
-      
+      doc.text(
+        `Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1).replace('-', ' ')}`,
+        14,
+        50
+      );
+      doc.text(
+        `Generated: ${currentDate.toLocaleDateString()} ${currentDate.toLocaleTimeString()}`,
+        14,
+        57
+      );
+
       let yPosition = 70;
-      
+
       switch (reportType) {
         case 'user-activity':
           if (userActivityData.length === 0) {
             doc.text('No user activity data available.', 14, yPosition);
             break;
           }
-          
+
           autoTable(doc, {
             startY: yPosition,
-            head: [['User Name', 'USN', 'Total Borrowed', 'Current', 'Overdue', 'Fines', 'Last Activity']],
+            head: [
+              [
+                'User Name',
+                'USN',
+                'Total Borrowed',
+                'Current',
+                'Overdue',
+                'Fines',
+                'Last Activity',
+              ],
+            ],
             body: userActivityData.map(user => [
               user.user_name,
               user.user_usn,
@@ -723,20 +901,20 @@ const Reports: React.FC = () => {
               user.current_books.toString(),
               user.overdue_books.toString(),
               `₹${user.total_fines}`,
-              user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A'
+              user.last_activity ? new Date(user.last_activity).toLocaleDateString() : 'N/A',
             ]),
             theme: 'grid',
             headStyles: { fillColor: [59, 130, 246] },
-            styles: { fontSize: 8 }
+            styles: { fontSize: 8 },
           });
           break;
-          
+
         case 'book-circulation':
           if (bookCirculationData.length === 0) {
             doc.text('No book circulation data available.', 14, yPosition);
             break;
           }
-          
+
           autoTable(doc, {
             startY: yPosition,
             head: [['Title', 'Author', 'ISBN', 'Issues', 'Status', 'Last Issued', 'Days Borrowed']],
@@ -747,20 +925,20 @@ const Reports: React.FC = () => {
               book.total_issues.toString(),
               book.current_status,
               book.last_issued ? new Date(book.last_issued).toLocaleDateString() : 'N/A',
-              book.total_days_borrowed.toString()
+              book.total_days_borrowed.toString(),
             ]),
             theme: 'grid',
             headStyles: { fillColor: [59, 130, 246] },
-            styles: { fontSize: 8 }
+            styles: { fontSize: 8 },
           });
           break;
-          
+
         case 'overdue-summary':
           if (!overdueSummaryData) {
             doc.text('No overdue summary data available.', 14, yPosition);
             break;
           }
-          
+
           autoTable(doc, {
             startY: yPosition,
             head: [['Metric', 'Value']],
@@ -769,20 +947,23 @@ const Reports: React.FC = () => {
               ['Total Pending Fines', `₹${overdueSummaryData.total_pending_fines}`],
               ['Total Paid Fines', `₹${overdueSummaryData.total_paid_fines}`],
               ['Total Waived Fines', `₹${overdueSummaryData.total_waived_fines}`],
-              ['Average Overdue Days', `${(overdueSummaryData.average_overdue_days || 0).toFixed(2)} days`]
+              [
+                'Average Overdue Days',
+                `${(overdueSummaryData.average_overdue_days || 0).toFixed(2)} days`,
+              ],
             ],
             theme: 'grid',
             headStyles: { fillColor: [59, 130, 246] },
-            styles: { fontSize: 10 }
+            styles: { fontSize: 10 },
           });
           break;
-          
+
         case 'inventory-status':
           if (!inventoryStatusData) {
             doc.text('No inventory status data available.', 14, yPosition);
             break;
           }
-          
+
           // Main metrics
           autoTable(doc, {
             startY: yPosition,
@@ -792,17 +973,20 @@ const Reports: React.FC = () => {
               ['Available Books', (inventoryStatusData.available_books || 0).toString()],
               ['Issued Books', (inventoryStatusData.issued_books || 0).toString()],
               ['Total Racks', (inventoryStatusData.total_racks || 0).toString()],
-              ['Total Shelves', (inventoryStatusData.total_shelves || 0).toString()]
+              ['Total Shelves', (inventoryStatusData.total_shelves || 0).toString()],
             ],
             theme: 'grid',
             headStyles: { fillColor: [59, 130, 246] },
-            styles: { fontSize: 10 }
+            styles: { fontSize: 10 },
           });
-          
+
           // Shelf utilization
-          if (inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0) {
+          if (
+            inventoryStatusData.shelf_utilization &&
+            inventoryStatusData.shelf_utilization.length > 0
+          ) {
             const finalY = (doc as any).lastAutoTable.finalY || yPosition + 50;
-            
+
             autoTable(doc, {
               startY: finalY + 10,
               head: [['Shelf Name', 'Capacity', 'Current Books', 'Utilization %']],
@@ -810,25 +994,25 @@ const Reports: React.FC = () => {
                 shelf.shelf_name || 'N/A',
                 (shelf.capacity || 0).toString(),
                 (shelf.current_books || 0).toString(),
-                `${(shelf.utilization_percentage || 0).toFixed(1)}%`
+                `${(shelf.utilization_percentage || 0).toFixed(1)}%`,
               ]),
               theme: 'grid',
               headStyles: { fillColor: [16, 185, 129] },
-              styles: { fontSize: 9 }
+              styles: { fontSize: 9 },
             });
           }
           break;
-          
+
         case 'all-reports':
           let currentY = yPosition;
-          
+
           // User Activity Section
           if (userActivityData && userActivityData.length > 0) {
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.text('User Activity Report', 14, currentY);
             currentY += 10;
-            
+
             autoTable(doc, {
               startY: currentY,
               head: [['User Name', 'USN', 'Total Borrowed', 'Current', 'Overdue', 'Fines']],
@@ -838,47 +1022,51 @@ const Reports: React.FC = () => {
                 (user.total_books_borrowed || 0).toString(),
                 (user.current_books || 0).toString(),
                 (user.overdue_books || 0).toString(),
-                `₹${user.total_fines || 0}`
+                `₹${user.total_fines || 0}`,
               ]),
               theme: 'grid',
               headStyles: { fillColor: [59, 130, 246] },
-              styles: { fontSize: 7 }
+              styles: { fontSize: 7 },
             });
-            
+
             currentY = (doc as any).lastAutoTable.finalY + 15;
           } else {
             doc.setFontSize(12);
             doc.text('User Activity Report: No data available', 14, currentY);
             currentY += 20;
           }
-          
+
           // Book Circulation Section
           if (bookCirculationData && bookCirculationData.length > 0) {
             if (currentY > 200) {
               doc.addPage();
               currentY = 20;
             }
-            
+
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.text('Book Circulation Report', 14, currentY);
             currentY += 10;
-            
+
             autoTable(doc, {
               startY: currentY,
               head: [['Title', 'Author', 'Issues', 'Status', 'Days Borrowed']],
               body: bookCirculationData.map(book => [
-                (book.book_title && book.book_title.length > 30) ? book.book_title.substring(0, 30) + '...' : (book.book_title || 'N/A'),
-                (book.book_author && book.book_author.length > 20) ? book.book_author.substring(0, 20) + '...' : (book.book_author || 'N/A'),
+                book.book_title && book.book_title.length > 30
+                  ? book.book_title.substring(0, 30) + '...'
+                  : book.book_title || 'N/A',
+                book.book_author && book.book_author.length > 20
+                  ? book.book_author.substring(0, 20) + '...'
+                  : book.book_author || 'N/A',
                 (book.total_issues || 0).toString(),
                 book.current_status || 'N/A',
-                (book.total_days_borrowed || 0).toString()
+                (book.total_days_borrowed || 0).toString(),
               ]),
               theme: 'grid',
               headStyles: { fillColor: [16, 185, 129] },
-              styles: { fontSize: 7 }
+              styles: { fontSize: 7 },
             });
-            
+
             currentY = (doc as any).lastAutoTable.finalY + 15;
           } else {
             if (currentY > 220) {
@@ -889,19 +1077,19 @@ const Reports: React.FC = () => {
             doc.text('Book Circulation Report: No data available', 14, currentY);
             currentY += 20;
           }
-          
+
           // Overdue Summary Section
           if (overdueSummaryData) {
             if (currentY > 220) {
               doc.addPage();
               currentY = 20;
             }
-            
+
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.text('Overdue Summary Report', 14, currentY);
             currentY += 10;
-            
+
             autoTable(doc, {
               startY: currentY,
               head: [['Metric', 'Value']],
@@ -910,13 +1098,16 @@ const Reports: React.FC = () => {
                 ['Total Pending Fines', `₹${overdueSummaryData.total_pending_fines || 0}`],
                 ['Total Paid Fines', `₹${overdueSummaryData.total_paid_fines || 0}`],
                 ['Total Waived Fines', `₹${overdueSummaryData.total_waived_fines || 0}`],
-                ['Average Overdue Days', `${(overdueSummaryData.average_overdue_days || 0).toFixed(2)} days`]
+                [
+                  'Average Overdue Days',
+                  `${(overdueSummaryData.average_overdue_days || 0).toFixed(2)} days`,
+                ],
               ],
               theme: 'grid',
               headStyles: { fillColor: [239, 68, 68] },
-              styles: { fontSize: 9 }
+              styles: { fontSize: 9 },
             });
-            
+
             currentY = (doc as any).lastAutoTable.finalY + 15;
           } else {
             if (currentY > 220) {
@@ -927,19 +1118,19 @@ const Reports: React.FC = () => {
             doc.text('Overdue Summary Report: No data available', 14, currentY);
             currentY += 20;
           }
-          
+
           // Inventory Status Section
           if (inventoryStatusData) {
             if (currentY > 220) {
               doc.addPage();
               currentY = 20;
             }
-            
+
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.text('Inventory Status Report', 14, currentY);
             currentY += 10;
-            
+
             autoTable(doc, {
               startY: currentY,
               head: [['Metric', 'Value']],
@@ -948,11 +1139,11 @@ const Reports: React.FC = () => {
                 ['Available Books', (inventoryStatusData.available_books || 0).toString()],
                 ['Issued Books', (inventoryStatusData.issued_books || 0).toString()],
                 ['Total Racks', (inventoryStatusData.total_racks || 0).toString()],
-                ['Total Shelves', (inventoryStatusData.total_shelves || 0).toString()]
+                ['Total Shelves', (inventoryStatusData.total_shelves || 0).toString()],
               ],
               theme: 'grid',
               headStyles: { fillColor: [245, 158, 11] },
-              styles: { fontSize: 9 }
+              styles: { fontSize: 9 },
             });
           } else {
             if (currentY > 220) {
@@ -964,12 +1155,16 @@ const Reports: React.FC = () => {
           }
           break;
       }
-      
+
       // Save the PDF
-      const fileName = reportType === 'all-reports' ? 'complete-library-report' : `${reportType}-report`;
+      const fileName =
+        reportType === 'all-reports' ? 'complete-library-report' : `${reportType}-report`;
       doc.save(`${fileName}-${new Date().toISOString().split('T')[0]}.pdf`);
-      showNotification('success', 'PDF exported successfully', 'Report has been downloaded to your device.');
-      
+      showNotification(
+        'success',
+        'PDF exported successfully',
+        'Report has been downloaded to your device.'
+      );
     } catch (error) {
       console.error('PDF export error:', error);
       showNotification('error', 'PDF export failed', 'Unable to generate PDF. Please try again.');
@@ -1093,10 +1288,16 @@ const Reports: React.FC = () => {
                   Showing {Math.min(userActivityData.length, 20)} of {userActivityData.length} users
                 </div>
                 <div className="flex space-x-2">
-                  <button className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50" disabled>
+                  <button
+                    className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                    disabled
+                  >
                     Previous
                   </button>
-                  <button className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50" disabled>
+                  <button
+                    className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                    disabled
+                  >
                     Next
                   </button>
                 </div>
@@ -1298,7 +1499,8 @@ const Reports: React.FC = () => {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Shelf Utilization</h3>
               <div className="space-y-4">
-                {inventoryStatusData.shelf_utilization && inventoryStatusData.shelf_utilization.length > 0 ? (
+                {inventoryStatusData.shelf_utilization &&
+                inventoryStatusData.shelf_utilization.length > 0 ? (
                   inventoryStatusData.shelf_utilization.map(shelf => (
                     <div key={shelf.shelf_id} className="space-y-2">
                       <div className="flex justify-between text-sm">
@@ -1313,8 +1515,8 @@ const Reports: React.FC = () => {
                             shelf.utilization_percentage >= 90
                               ? 'bg-red-500'
                               : shelf.utilization_percentage >= 75
-                                 ? 'bg-amber-500'
-                                 : 'bg-green-500'
+                                ? 'bg-amber-500'
+                                : 'bg-green-500'
                           }`}
                           style={{ width: `${shelf.utilization_percentage}%` }}
                         ></div>
@@ -1338,7 +1540,7 @@ const Reports: React.FC = () => {
               <h2 className="text-2xl font-bold mb-2">Complete Library Report</h2>
               <p className="text-indigo-100">Comprehensive view of all library operations</p>
             </div>
-            
+
             {/* Quick Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl shadow-lg p-6">
@@ -1348,7 +1550,9 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Active Users</p>
-                    <p className="text-2xl font-bold text-gray-900">{userActivityData?.length || 0}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {userActivityData?.length || 0}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1359,7 +1563,9 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Books</p>
-                    <p className="text-2xl font-bold text-gray-900">{bookCirculationData?.length || 0}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {bookCirculationData?.length || 0}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1370,7 +1576,9 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Overdue Books</p>
-                    <p className="text-2xl font-bold text-gray-900">{overdueSummaryData?.total_overdue_books || 0}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {overdueSummaryData?.total_overdue_books || 0}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1381,12 +1589,14 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Available Books</p>
-                    <p className="text-2xl font-bold text-gray-900">{inventoryStatusData?.available_books || 0}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {inventoryStatusData?.available_books || 0}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
-            
+
             {/* Export Notice */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <div className="flex items-start space-x-3">
@@ -1394,12 +1604,13 @@ const Reports: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-medium text-amber-800">Complete Report View</h4>
                   <p className="text-sm text-amber-700 mt-1">
-                    This view shows a summary of all reports. Use the PDF or CSV export buttons above to download the complete detailed data for all report types.
+                    This view shows a summary of all reports. Use the PDF or CSV export buttons
+                    above to download the complete detailed data for all report types.
                   </p>
                 </div>
               </div>
             </div>
-            
+
             {/* Summary Cards for Each Report Type */}
             <div className="space-y-6">
               {/* User Activity Summary */}
@@ -1411,7 +1622,9 @@ const Reports: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">{userActivityData?.length || 0}</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {userActivityData?.length || 0}
+                      </p>
                       <p className="text-sm text-gray-600">Active Users</p>
                     </div>
                     <div className="text-center p-4 bg-green-50 rounded-lg">
@@ -1429,7 +1642,7 @@ const Reports: React.FC = () => {
                   </div>
                 </div>
               )}
-              
+
               {/* Book Circulation Summary */}
               {bookCirculationData && bookCirculationData.length > 0 && (
                 <div className="bg-white rounded-xl shadow-lg p-6">
@@ -1439,25 +1652,31 @@ const Reports: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">{bookCirculationData?.length || 0}</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {bookCirculationData?.length || 0}
+                      </p>
                       <p className="text-sm text-gray-600">Books in Catalog</p>
                     </div>
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
                       <p className="text-2xl font-bold text-blue-600">
-                        {bookCirculationData?.reduce((sum, book) => sum + (book.total_issues || 0), 0) || 0}
+                        {bookCirculationData?.reduce(
+                          (sum, book) => sum + (book.total_issues || 0),
+                          0
+                        ) || 0}
                       </p>
                       <p className="text-sm text-gray-600">Total Issues</p>
                     </div>
                     <div className="text-center p-4 bg-amber-50 rounded-lg">
                       <p className="text-2xl font-bold text-amber-600">
-                        {bookCirculationData?.filter(book => book.current_status === 'Issued').length || 0}
+                        {bookCirculationData?.filter(book => book.current_status === 'Issued')
+                          .length || 0}
                       </p>
                       <p className="text-sm text-gray-600">Currently Issued</p>
                     </div>
                   </div>
                 </div>
               )}
-              
+
               {/* Overdue Summary */}
               {overdueSummaryData && (
                 <div className="bg-white rounded-xl shadow-lg p-6">
@@ -1467,25 +1686,33 @@ const Reports: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="text-center p-4 bg-red-50 rounded-lg">
-                      <p className="text-2xl font-bold text-red-600">{overdueSummaryData.total_overdue_books}</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {overdueSummaryData.total_overdue_books}
+                      </p>
                       <p className="text-sm text-gray-600">Overdue Books</p>
                     </div>
                     <div className="text-center p-4 bg-orange-50 rounded-lg">
-                      <p className="text-2xl font-bold text-orange-600">₹{overdueSummaryData.total_pending_fines}</p>
+                      <p className="text-2xl font-bold text-orange-600">
+                        ₹{overdueSummaryData.total_pending_fines}
+                      </p>
                       <p className="text-sm text-gray-600">Pending Fines</p>
                     </div>
                     <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">₹{overdueSummaryData.total_paid_fines}</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        ₹{overdueSummaryData.total_paid_fines}
+                      </p>
                       <p className="text-sm text-gray-600">Paid Fines</p>
                     </div>
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">{overdueSummaryData.average_overdue_days?.toFixed(1) || '0.0'}</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {overdueSummaryData.average_overdue_days?.toFixed(1) || '0.0'}
+                      </p>
                       <p className="text-sm text-gray-600">Avg Overdue Days</p>
                     </div>
                   </div>
                 </div>
               )}
-              
+
               {/* Inventory Summary */}
               {inventoryStatusData && (
                 <div className="bg-white rounded-xl shadow-lg p-6">
@@ -1495,19 +1722,27 @@ const Reports: React.FC = () => {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">{inventoryStatusData.total_books}</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {inventoryStatusData.total_books}
+                      </p>
                       <p className="text-sm text-gray-600">Total Books</p>
                     </div>
                     <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">{inventoryStatusData.available_books}</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {inventoryStatusData.available_books}
+                      </p>
                       <p className="text-sm text-gray-600">Available</p>
                     </div>
                     <div className="text-center p-4 bg-amber-50 rounded-lg">
-                      <p className="text-2xl font-bold text-amber-600">{inventoryStatusData.issued_books}</p>
+                      <p className="text-2xl font-bold text-amber-600">
+                        {inventoryStatusData.issued_books}
+                      </p>
                       <p className="text-sm text-gray-600">Issued</p>
                     </div>
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <p className="text-2xl font-bold text-purple-600">{inventoryStatusData.total_shelves}</p>
+                      <p className="text-2xl font-bold text-purple-600">
+                        {inventoryStatusData.total_shelves}
+                      </p>
                       <p className="text-sm text-gray-600">Total Shelves</p>
                     </div>
                   </div>
@@ -1577,9 +1812,7 @@ const Reports: React.FC = () => {
           </div>
           {lastFailedOperation && (
             <div className="mt-4 p-3 bg-white/10 rounded-lg">
-              <p className="text-sm text-red-100">
-                Last failed operation: {lastFailedOperation}
-              </p>
+              <p className="text-sm text-red-100">Last failed operation: {lastFailedOperation}</p>
             </div>
           )}
         </div>
@@ -1612,7 +1845,9 @@ const Reports: React.FC = () => {
             className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50"
             title="Refresh Data"
           >
-            <RefreshCw className={`w-4 h-4 text-white ${(isLoading || isRetrying) ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-4 h-4 text-white ${isLoading || isRetrying ? 'animate-spin' : ''}`}
+            />
           </button>
         </div>
       </div>
@@ -1620,7 +1855,7 @@ const Reports: React.FC = () => {
       {/* Controls */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         {renderFormErrors()}
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left column - Report Settings */}
           <div className="space-y-4">
@@ -1773,7 +2008,6 @@ const Reports: React.FC = () => {
                 Generate downloadable reports in your preferred format:
               </p>
               <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
-
                 <button
                   onClick={handleExportPDF}
                   disabled={isLoading || isOperationLoading || isRetrying}
@@ -1807,10 +2041,12 @@ const Reports: React.FC = () => {
                   <h4 className="text-sm font-medium text-blue-900 mb-1">Export Information</h4>
 
                   <p className="text-sm text-red-700 mt-2">
-                    <strong>PDF:</strong> Formatted report document with tables and branding, perfect for presentations and formal reporting.
+                    <strong>PDF:</strong> Formatted report document with tables and branding,
+                    perfect for presentations and formal reporting.
                   </p>
                   <p className="text-sm text-green-700 mt-2">
-                    <strong>CSV:</strong> Raw data export compatible with Excel, Google Sheets, and other spreadsheet applications for custom analysis.
+                    <strong>CSV:</strong> Raw data export compatible with Excel, Google Sheets, and
+                    other spreadsheet applications for custom analysis.
                   </p>
                   {Object.keys(formErrors).length > 0 && (
                     <p className="text-sm text-red-700 mt-2">
@@ -1829,11 +2065,13 @@ const Reports: React.FC = () => {
                   <div>
                     <h4 className="text-sm font-medium text-amber-800">Recent Failure</h4>
                     <p className="text-sm text-amber-700">
-                      {lastFailedOperation} failed. {retryCount > 0 && `Attempted ${retryCount} time(s).`}
+                      {lastFailedOperation} failed.{' '}
+                      {retryCount > 0 && `Attempted ${retryCount} time(s).`}
                     </p>
                     {retryCount >= maxRetries && (
                       <p className="text-sm text-amber-700 mt-1">
-                        Maximum retry attempts reached. Please check your connection and try again later.
+                        Maximum retry attempts reached. Please check your connection and try again
+                        later.
                       </p>
                     )}
                   </div>
@@ -1851,8 +2089,8 @@ const Reports: React.FC = () => {
       {notification && (
         <div
           className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg ${
-            notification.type === 'success' 
-              ? 'bg-emerald-500 text-white' 
+            notification.type === 'success'
+              ? 'bg-emerald-500 text-white'
               : notification.type === 'warning'
                 ? 'bg-amber-500 text-white'
                 : notification.type === 'info'
@@ -1896,9 +2134,7 @@ const Reports: React.FC = () => {
                   Attempt {retryCount} of {maxRetries}
                 </p>
               )}
-              <p className="text-xs text-gray-400 mt-2">
-                Please wait, this may take a few moments
-              </p>
+              <p className="text-xs text-gray-400 mt-2">Please wait, this may take a few moments</p>
             </div>
           </div>
         </div>

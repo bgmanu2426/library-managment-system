@@ -123,25 +123,28 @@ export const cleanApiUrl = (url: string): string => {
   if (!url || typeof url !== 'string') {
     return url;
   }
-  
+
   // Remove :1 suffix from URL parameters that might have been malformed
   // This fixes the specific issue where URLs end up with dates like "2025-07-20T01:37:47.220Z:1"
-  return url.replace(/([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}%3A[0-9]{2}%3A[0-9]{2}\.[0-9]{3}Z):1/g, '$1');
+  return url.replace(
+    /([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}%3A[0-9]{2}%3A[0-9]{2}\.[0-9]{3}Z):1/g,
+    '$1'
+  );
 };
 
 export const validateReportUrl = (url: string, reportType: string): void => {
   validateApiUrl(url);
-  
+
   // Additional validation for report endpoints
   if (!url.includes('/api/reports/')) {
     throw new Error(`Invalid report endpoint for ${reportType}`);
   }
-  
+
   // Check for double-encoded parameters
   if (url.includes('%25') || url.includes('%3D%3D')) {
     throw new Error(`Malformed URL with double encoding detected: ${url}`);
   }
-  
+
   // Check for incomplete parameter substitution
   if (url.includes('{') || url.includes('}')) {
     throw new Error(`URL template not properly resolved: ${url}`);
@@ -297,34 +300,45 @@ const apiRequestWithRetry = async <T>(
 ): Promise<T> => {
   const maxRetries = 3;
   const baseDelay = 1000; // 1 second
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       // Validate URL before each attempt
       validateApiUrl(url);
-      
+
       const response = await apiRequest<T>(url, options, 1, 40000); // Single retry in apiRequest, 40s timeout
       return response;
     } catch (error) {
       console.warn(`${operationName} attempt ${attempt}/${maxRetries} failed:`, error);
-      
+
       if (error instanceof Error) {
         // Don't retry authentication or permission errors
-        if (error.message.includes('401') || error.message.includes('403') || 
-            error.message.includes('Authentication') || error.message.includes('Access denied')) {
+        if (
+          error.message.includes('401') ||
+          error.message.includes('403') ||
+          error.message.includes('Authentication') ||
+          error.message.includes('Access denied')
+        ) {
           throw error;
         }
-        
+
         // Don't retry client errors (400, 405) on final attempt
-        if (attempt === maxRetries && (error.message.includes('400') || error.message.includes('405'))) {
+        if (
+          attempt === maxRetries &&
+          (error.message.includes('400') || error.message.includes('405'))
+        ) {
           throw error;
         }
-        
+
         // Retry on network errors, timeouts, and server errors
-        if (error.message.includes('Network') || error.message.includes('timeout') || 
-            error.message.includes('500') || error.message.includes('502') || 
-            error.message.includes('503') || error.message.includes('504')) {
-          
+        if (
+          error.message.includes('Network') ||
+          error.message.includes('timeout') ||
+          error.message.includes('500') ||
+          error.message.includes('502') ||
+          error.message.includes('503') ||
+          error.message.includes('504')
+        ) {
           if (attempt < maxRetries) {
             const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
             console.log(`Retrying ${operationName} in ${delay}ms...`);
@@ -333,12 +347,12 @@ const apiRequestWithRetry = async <T>(
           }
         }
       }
-      
+
       // Re-throw error if we've exhausted retries or shouldn't retry
       throw error;
     }
   }
-  
+
   throw new Error(`${operationName} failed after ${maxRetries} attempts`);
 };
 
@@ -1843,7 +1857,9 @@ export const getUserActivityReport = async (
 
     if (error instanceof Error) {
       if (error.message.includes('400') || error.message.includes('Bad Request')) {
-        throw new Error('Invalid report parameters. Please check your date range and user selection.');
+        throw new Error(
+          'Invalid report parameters. Please check your date range and user selection.'
+        );
       } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
         throw new Error('Report generation method not supported. Please try refreshing the page.');
       } else if (error.message.includes('401') || error.message.includes('Authentication')) {
@@ -1915,7 +1931,9 @@ export const getBookCirculationReport = async (
 
     if (error instanceof Error) {
       if (error.message.includes('400') || error.message.includes('Bad Request')) {
-        throw new Error('Invalid report parameters. Please check your date range and genre selection.');
+        throw new Error(
+          'Invalid report parameters. Please check your date range and genre selection.'
+        );
       } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
         throw new Error('Report generation method not supported. Please try refreshing the page.');
       } else if (error.message.includes('401') || error.message.includes('Authentication')) {
@@ -2025,7 +2043,7 @@ const isValidDate = (dateString: string): boolean => {
 };
 
 export const getInventoryStatusReport = async (token: string): Promise<InventoryStatusReport> => {
-  const response = await apiRequest<{ inventory_status: InventoryStatusReport}>(
+  const response = await apiRequest<{ inventory_status: InventoryStatusReport }>(
     getApiUrl(API_ENDPOINTS.INVENTORY_STATUS_REPORT),
     createAuthenticatedRequest(token)
   );
@@ -2082,32 +2100,34 @@ export const exportReportExcel = async (
 ): Promise<Blob> => {
   try {
     validateAuthToken(token);
-    
+
     // Build URL with proper parameter handling
     let url = `${API_ENDPOINTS.EXPORT_EXCEL}?report_type=${reportType}`;
-    
+
     if (params) {
       const searchParams = new URLSearchParams(params);
       url += `&${searchParams.toString()}`;
     }
-    
+
     // Validate constructed URL
     const fullUrl = getApiUrl(url);
     validateReportUrl(fullUrl, reportType);
-    
+
     const response = await fetch(fullUrl, createAuthenticatedRequest(token));
-    
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
       throw new Error(`Export failed with status ${response.status}: ${errorText}`);
     }
-    
+
     return response.blob();
   } catch (error) {
     console.error('Error exporting Excel report:', error);
     if (error instanceof Error) {
       if (error.message.includes('400') || error.message.includes('Bad Request')) {
-        throw new Error('Invalid export parameters. Please check your date range and filter settings.');
+        throw new Error(
+          'Invalid export parameters. Please check your date range and filter settings.'
+        );
       } else if (error.message.includes('401') || error.message.includes('Authentication')) {
         throw new Error('Authentication expired. Please log in again to export reports.');
       } else if (error.message.includes('403')) {
@@ -2123,7 +2143,9 @@ export const exportReportPDF = async (
   reportType: string,
   params?: Record<string, string>
 ): Promise<void> => {
-  throw new Error('PDF export is temporarily unavailable. Please use the client-side PDF generation feature instead.');
+  throw new Error(
+    'PDF export is temporarily unavailable. Please use the client-side PDF generation feature instead.'
+  );
 };
 
 // Dashboard Statistics

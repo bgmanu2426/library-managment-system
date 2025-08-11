@@ -1,7 +1,6 @@
 from sqlmodel import SQLModel, create_engine, Session
 from contextlib import contextmanager
-from fastapi import Depends
-from typing import Generator
+from typing import Generator, Optional
 import os
 import time
 import logging_config
@@ -9,8 +8,8 @@ import logging_config
 # Get database logger
 database_logger = logging_config.get_logger('database')
 
-# Database URL configuration
-DATABASE_URL = "sqlite:///./library.db"
+# Database URL configuration (read from environment, fallback to local sqlite)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./library.db")
 
 # Log database configuration
 database_logger.info(f"Database configuration - URL: {DATABASE_URL}")
@@ -139,7 +138,7 @@ def get_session() -> Generator[Session, None, None]:
         database_logger.debug(f"[{correlation_id}] FastAPI database session dependency completed")
 
 # SQL Query logging function (for use with manual queries)
-def log_sql_query(query: str, params: dict = None, correlation_id: str = None):
+def log_sql_query(query: str, params: Optional[dict] = None, correlation_id: Optional[str] = None):
     """Log SQL queries for debugging (configurable via log level)."""
     if correlation_id is None:
         correlation_id = logging_config.get_correlation_id()
@@ -150,7 +149,7 @@ def log_sql_query(query: str, params: dict = None, correlation_id: str = None):
             database_logger.debug(f"[{correlation_id}] SQL Params: {params}")
 
 # Connection pool status logging (for future enhancement with connection pooling)
-def log_connection_pool_status(correlation_id: str = None):
+def log_connection_pool_status(correlation_id: Optional[str] = None):
     """Log connection pool status if applicable."""
     if correlation_id is None:
         correlation_id = logging_config.get_correlation_id()

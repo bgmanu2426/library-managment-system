@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Archive, 
-  Plus, 
-  Search, 
+import {
+  Archive,
+  Plus,
+  Search,
   Filter,
   Edit3,
   Trash2,
@@ -15,15 +15,9 @@ import {
   CheckCircle,
   BarChart3,
   TrendingUp,
-  Database
+  Database,
 } from 'lucide-react';
-import { 
-  getRacks, 
-  createRack, 
-  updateRack, 
-  deleteRack,
-  getShelves
-} from '../../utils/api';
+import { getRacks, createRack, updateRack, deleteRack, getShelves } from '../../utils/api';
 import { Rack, Shelf, RackCreatePayload, RackUpdatePayload } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -35,7 +29,7 @@ const RackManagement: React.FC = () => {
   const [selectedRack, setSelectedRack] = useState<Rack | null>(null);
   const [newRack, setNewRack] = useState<RackCreatePayload>({
     name: '',
-    description: ''
+    description: '',
   });
 
   const { user } = useAuth();
@@ -44,8 +38,11 @@ const RackManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
-  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -59,7 +56,7 @@ const RackManagement: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     if (!user) {
-      setError("Authentication required");
+      setError('Authentication required');
       setIsLoading(false);
       return;
     }
@@ -75,7 +72,7 @@ const RackManagement: React.FC = () => {
 
       const [racksResponse, shelvesResponse] = await Promise.all([
         getRacks(token),
-        getShelves(token)
+        getShelves(token),
       ]);
 
       setRacks(racksResponse.racks || []);
@@ -114,17 +111,20 @@ const RackManagement: React.FC = () => {
     return totalCapacity > 0 ? Math.round((totalBooks / totalCapacity) * 100) : 0;
   };
 
-  const filteredRacks = racks.filter(rack =>
-    rack.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    rack.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredRacks = racks.filter(
+    rack =>
+      rack.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rack.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const validateRackForm = (rackData: RackCreatePayload | RackUpdatePayload): {[key: string]: string} => {
-    const errors: {[key: string]: string} = {};
-    
+  const validateRackForm = (
+    rackData: RackCreatePayload | RackUpdatePayload
+  ): { [key: string]: string } => {
+    const errors: { [key: string]: string } = {};
+
     if (!rackData.name?.trim()) errors.name = 'Rack name is required';
     if (!rackData.description?.trim()) errors.description = 'Description is required';
-    
+
     return errors;
   };
 
@@ -150,7 +150,7 @@ const RackManagement: React.FC = () => {
       showNotification('success', 'Rack created successfully');
       setNewRack({
         name: '',
-        description: ''
+        description: '',
       });
       setFormErrors({});
       setShowAddModal(false);
@@ -177,7 +177,7 @@ const RackManagement: React.FC = () => {
 
     const rackData: RackUpdatePayload = {
       name: selectedRack.name,
-      description: selectedRack.description
+      description: selectedRack.description,
     };
 
     const errors = validateRackForm(rackData);
@@ -293,9 +293,7 @@ const RackManagement: React.FC = () => {
                 <Archive className="w-8 h-8 text-blue-600" />
                 Rack Management
               </h1>
-              <p className="mt-2 text-gray-600">
-                Manage library racks and their organization
-              </p>
+              <p className="mt-2 text-gray-600">Manage library racks and their organization</p>
             </div>
             <div className="mt-4 sm:mt-0 flex gap-3">
               <button
@@ -378,7 +376,7 @@ const RackManagement: React.FC = () => {
                     type="text"
                     placeholder="Search racks by name or description..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={e => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -389,14 +387,17 @@ const RackManagement: React.FC = () => {
 
         {/* Racks Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRacks.map((rack) => {
+          {filteredRacks.map(rack => {
             const shelfCount = getShelfCount(rack.id);
             const totalBooksInRack = getTotalBooks(rack.id);
             const totalCapacityInRack = getTotalCapacity(rack.id);
             const utilizationPercentage = getUtilization(rack.id);
 
             return (
-              <div key={rack.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+              <div
+                key={rack.id}
+                className="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+              >
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -429,32 +430,42 @@ const RackManagement: React.FC = () => {
                       <span className="text-sm text-gray-600">Shelves</span>
                       <span className="text-sm font-medium text-gray-900">{shelfCount}</span>
                     </div>
-                    
+
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Books</span>
                       <span className="text-sm font-medium text-gray-900">{totalBooksInRack}</span>
                     </div>
-                    
+
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Capacity</span>
-                      <span className="text-sm font-medium text-gray-900">{totalCapacityInRack}</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {totalCapacityInRack}
+                      </span>
                     </div>
 
                     <div className="pt-2">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-sm text-gray-600">Utilization</span>
-                        <span className={`text-sm font-medium ${
-                          utilizationPercentage >= 80 ? 'text-red-600' : 
-                          utilizationPercentage >= 60 ? 'text-yellow-600' : 'text-green-600'
-                        }`}>
+                        <span
+                          className={`text-sm font-medium ${
+                            utilizationPercentage >= 80
+                              ? 'text-red-600'
+                              : utilizationPercentage >= 60
+                                ? 'text-yellow-600'
+                                : 'text-green-600'
+                          }`}
+                        >
                           {utilizationPercentage}%
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full transition-all ${
-                            utilizationPercentage >= 80 ? 'bg-red-500' : 
-                            utilizationPercentage >= 60 ? 'bg-yellow-500' : 'bg-green-500'
+                            utilizationPercentage >= 80
+                              ? 'bg-red-500'
+                              : utilizationPercentage >= 60
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
                           }`}
                           style={{ width: `${utilizationPercentage}%` }}
                         />
@@ -478,7 +489,9 @@ const RackManagement: React.FC = () => {
             <Archive className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No racks found</h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm ? 'No racks match your search criteria.' : 'Get started by adding your first rack.'}
+              {searchTerm
+                ? 'No racks match your search criteria.'
+                : 'Get started by adding your first rack.'}
             </p>
             {!searchTerm && (
               <button
@@ -494,9 +507,11 @@ const RackManagement: React.FC = () => {
 
         {/* Notification */}
         {notification && (
-          <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-            notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-          }`}>
+          <div
+            className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+              notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+            }`}
+          >
             <div className="flex items-center gap-3">
               {notification.type === 'success' ? (
                 <CheckCircle className="w-5 h-5" />
@@ -524,7 +539,7 @@ const RackManagement: React.FC = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -533,7 +548,7 @@ const RackManagement: React.FC = () => {
                   <input
                     type="text"
                     value={newRack.name}
-                    onChange={(e) => setNewRack({ ...newRack, name: e.target.value })}
+                    onChange={e => setNewRack({ ...newRack, name: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.name ? 'border-red-300' : 'border-gray-300'
                     }`}
@@ -550,7 +565,7 @@ const RackManagement: React.FC = () => {
                   </label>
                   <textarea
                     value={newRack.description}
-                    onChange={(e) => setNewRack({ ...newRack, description: e.target.value })}
+                    onChange={e => setNewRack({ ...newRack, description: e.target.value })}
                     rows={3}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.description ? 'border-red-300' : 'border-gray-300'
@@ -612,7 +627,7 @@ const RackManagement: React.FC = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -621,7 +636,7 @@ const RackManagement: React.FC = () => {
                   <input
                     type="text"
                     value={selectedRack.name}
-                    onChange={(e) => setSelectedRack({ ...selectedRack, name: e.target.value })}
+                    onChange={e => setSelectedRack({ ...selectedRack, name: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.name ? 'border-red-300' : 'border-gray-300'
                     }`}
@@ -638,7 +653,9 @@ const RackManagement: React.FC = () => {
                   </label>
                   <textarea
                     value={selectedRack.description || ''}
-                    onChange={(e) => setSelectedRack({ ...selectedRack, description: e.target.value })}
+                    onChange={e =>
+                      setSelectedRack({ ...selectedRack, description: e.target.value })
+                    }
                     rows={3}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       formErrors.description ? 'border-red-300' : 'border-gray-300'
@@ -700,7 +717,7 @@ const RackManagement: React.FC = () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="p-6">
                 <div className="flex items-start gap-4">
                   <div className="p-2 bg-red-100 rounded-full">
@@ -715,8 +732,8 @@ const RackManagement: React.FC = () => {
                     </p>
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                       <p className="text-sm text-yellow-800">
-                        <strong>Warning:</strong> This action will also delete all shelves in this rack.
-                        Make sure all books are moved to other locations first.
+                        <strong>Warning:</strong> This action will also delete all shelves in this
+                        rack. Make sure all books are moved to other locations first.
                       </p>
                       <div className="mt-2 text-sm text-yellow-700">
                         <p>• Shelves: {getShelfCount(selectedRack.id)}</p>

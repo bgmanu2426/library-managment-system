@@ -1,200 +1,37 @@
-# Library Management System - Docker Compose Configuration
-# Complete setup with client, server, and database services
-
-version: '3.8'
+version: '3.9'
 
 services:
-  # PostgreSQL Database Service (Production)
-  database:
-    image: postgres:15-alpine
-    container_name: library-database
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: library_db
-      POSTGRES_USER: library_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password_change_in_production}
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./server/init-db:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    networks:
-      - library-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U library_user -d library_db"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  # FastAPI Server Service
   server:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: library-server
-    restart: unless-stopped
-    environment:
-      # Database Configuration
-      DATABASE_URL: postgresql://library_user:${DB_PASSWORD:-secure_password_change_in_production}@database:5432/library_db
-      
-      # JWT Configuration
-      SECRET_KEY: ${JWT_SECRET_KEY:-your-super-secret-jwt-key-change-this-in-production}
-      JWT_ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_DAYS: 30
-      
-      # Server Configuration
-      HOST: 0.0.0.0
-      PORT: 8000
-      ENVIRONMENT: ${ENVIRONMENT:-production}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      
-      # CORS Configuration
-      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://client:80,http://localhost:8080
-      
-      # Security Configuration
-      BCRYPT_ROUNDS: 12
-      SESSION_TIMEOUT_MINUTES: 60
-      RATE_LIMIT_PER_MINUTE: 100
-      
-      # File Upload Configuration
-      MAX_UPLOAD_SIZE: 10485760
-      ALLOWED_EXTENSIONS: .pdf,.doc,.docx,.txt,.jpg,.jpeg,.png
-      
-      # Feature Flags
-      ENABLE_USER_REGISTRATION: true
-      ENABLE_EMAIL_NOTIFICATIONS: false
-      ENABLE_BOOK_RECOMMENDATIONS: true
-      ENABLE_ADVANCED_SEARCH: true
-    volumes:
-      - server_logs:/app/logs
-      - ./server/uploads:/app/uploads:rw
+    container_name: lms-server
+    env_file:
+      - ./server/.env
     ports:
-      - "${SERVER_PORT:-8000}:8000"
-    networks:
-      - library-network
-    depends_on:
-      database:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - "8000:8000"
+    volumes:
+      - shared_data:/shared
+      - server_logs:/app/logs
+    restart: unless-stopped
 
-  # React Client Service
   client:
     build:
       context: ./client
       dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=${CLIENT_API_URL:-http://localhost:8000}
-        - VITE_APP_ENV=${ENVIRONMENT:-production}
-        - VITE_ENABLE_DEBUG_LOGGING=${DEBUG_LOGGING:-false}
-    container_name: library-client
-    restart: unless-stopped
+    container_name: lms-client
+    env_file:
+      - ./client/.env
+    ports:
+      - "5173:5173"
     environment:
-      - NODE_ENV=production
-    ports:
-      - "${CLIENT_PORT:-3000}:80"
-    networks:
-      - library-network
-    depends_on:
-      server:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # Redis Cache Service (Optional)
-  redis:
-    image: redis:7-alpine
-    container_name: library-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_change_in_production}
+      - VITE_PORT=5173
     volumes:
-      - redis_data:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    networks:
-      - library-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    profiles:
-      - cache
-
-  # Nginx Reverse Proxy Service
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: library-nginx
-    restart: unless-stopped
-    ports:
-      - "${NGINX_PORT:-80}:80"
-      - "${NGINX_SSL_PORT:-443}:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - nginx_logs:/var/log/nginx
-    networks:
-      - library-network
+      - shared_data:/shared
     depends_on:
-      - client
       - server
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    profiles:
-      - proxy
-
-  # Database Admin Tool (pgAdmin)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: library-pgadmin
     restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@library.local}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_password_change_in_production}
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    networks:
-      - library-network
-    depends_on:
-      - database
-    profiles:
-      - admin
 
-# Named Volumes
 volumes:
-  postgres_data:
-    driver: local
+  shared_data:
   server_logs:
-    driver: local
-  redis_data:
-    driver: local  
-  nginx_logs:
-    driver: local
-  pgadmin_data:
-    driver: local
-
-# Networks
-networks:
-  library-network:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.20.0.0/16
