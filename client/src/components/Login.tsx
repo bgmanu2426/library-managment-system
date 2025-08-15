@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import {
-  BookOpen,
-  User,
-  Lock,
-  Mail,
-  AlertCircle,
-  Loader2,
-  CheckCircle,
-  XCircle,
-} from 'lucide-react';
+import { BookOpen, User, Lock, Mail, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -196,17 +187,8 @@ const Login: React.FC = () => {
                   : 'bg-gradient-to-r from-blue-600 to-emerald-600 text-white hover:from-blue-700 hover:to-emerald-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
               }`}
             >
-              {loginInProgress ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Signing in...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Sign In</span>
-                </>
-              )}
+              <CheckCircle className="w-4 h-4" />
+              <span>Sign In</span>
             </button>
           </form>
 

@@ -106,7 +106,6 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         )
 
 @router.post("/logout")
-@router.get("/logout", include_in_schema=False)  # Added GET method for development purposes
 async def logout(request: Request, current_user: User = Depends(get_current_user)):
     """Logout endpoint for authenticated users"""
     correlation_id = logging_config.get_correlation_id()
@@ -149,7 +148,6 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
         )
 
 @router.get("/verify-token", response_model=TokenVerifyResponse)
-@router.post("/verify-token", response_model=TokenVerifyResponse, include_in_schema=False)  # Added POST method for development
 async def verify_token(request: Request, current_user: User = Depends(get_current_user)):
     """Verify authentication token and return user information"""
     correlation_id = logging_config.get_correlation_id()
@@ -201,7 +199,6 @@ async def verify_token(request: Request, current_user: User = Depends(get_curren
         )
 
 @router.get("/me")
-@router.post("/me", include_in_schema=False)  # Added POST method for development
 async def get_current_user_info(request: Request, current_user: User = Depends(get_current_user)):
     """Get current authenticated user information"""
     correlation_id = logging_config.get_correlation_id()
@@ -241,29 +238,6 @@ async def get_current_user_info(request: Request, current_user: User = Depends(g
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="User information retrieval error",
         )
-
-# Health check endpoint for debugging authentication issues
-@router.get("/health")
-@router.post("/health")
-async def auth_health_check(request: Request):
-    """Health check endpoint for the authentication system"""
-    correlation_id = logging_config.get_correlation_id()
-    start_time = time.time()
-    
-    # Get client IP for security monitoring
-    client_ip = request.client.host if request else "unknown"
-    
-    api_logger.info(f"[{correlation_id}] Auth health check requested from IP {client_ip}")
-    
-    # Performance logging
-    total_duration = time.time() - start_time
-    logging_config.log_performance(api_logger, "Auth health check", total_duration, correlation_id)
-    
-    return {
-        "status": "healthy",
-        "auth_system": "operational",
-        "timestamp": datetime.utcnow().isoformat()
-    }
 
 @router.get("/token-debug")
 async def debug_token(request: Request):

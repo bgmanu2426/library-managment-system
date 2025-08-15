@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   X,
   RotateCcw,
-  User,
   RefreshCw,
   Loader,
   DollarSign,
@@ -28,14 +27,7 @@ import {
   getUsers,
   getFines,
 } from '../../utils/api';
-import {
-  Book,
-  Rack,
-  Shelf,
-  BookCreatePayload,
-  BookUpdatePayload,
-  User as AppUser,
-} from '../../types';
+import { Book, Rack, Shelf, BookCreatePayload, BookUpdatePayload } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
 const BookManagement: React.FC = () => {
@@ -44,7 +36,6 @@ const BookManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showReturnModal, setShowReturnModal] = useState(false);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [newBook, setNewBook] = useState({
     title: '',
@@ -54,23 +45,11 @@ const BookManagement: React.FC = () => {
     rackId: '',
     shelfId: '',
   });
-  const [issueData, setIssueData] = useState({
-    isbn: '',
-    userUsn: '',
-    dueDate: '',
-  });
-  const [returnData, setReturnData] = useState({
-    isbn: '',
-    userUsn: '',
-    condition: 'good' as 'good' | 'damaged' | 'lost',
-    notes: '',
-  });
 
   const { user } = useAuth();
   const [books, setBooks] = useState<Book[]>([]);
   const [racks, setRacks] = useState<Rack[]>([]);
   const [shelves, setShelves] = useState<Shelf[]>([]);
-  const [users, setUsers] = useState<AppUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +61,6 @@ const BookManagement: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalBooks, setTotalBooks] = useState(0);
-  const [totalUsers, setTotalUsers] = useState(0);
   const itemsPerPage = 20;
 
   const [isSearching, setIsSearching] = useState(false);
@@ -101,34 +79,6 @@ const BookManagement: React.FC = () => {
   const getAvailableShelves = (rackId: number) => {
     return shelves.filter(shelf => shelf.rack_id === rackId);
   };
-
-  const checkBookHasPendingFines = useCallback(
-    async (bookId: number): Promise<boolean> => {
-      // Check cache first
-      if (fineStatusCache[bookId] !== undefined) {
-        return fineStatusCache[bookId];
-      }
-
-      try {
-        const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-        if (!token) return false;
-
-        const response = await getFines(token, 'pending');
-        const bookInState = books.find(b => b.id === bookId);
-        const hasPendingFines = response.fines.some(
-          fine => bookInState && fine.book_isbn === bookInState.isbn
-        );
-
-        // Update cache
-        setFineStatusCache(prev => ({ ...prev, [bookId]: hasPendingFines }));
-        return hasPendingFines;
-      } catch (error) {
-        console.error('Error checking fine status:', error);
-        return false;
-      }
-    },
-    [fineStatusCache, books]
-  );
 
   const checkMultipleBooksFineStatus = useCallback(
     async (bookIds: number[]) => {
@@ -230,11 +180,7 @@ const BookManagement: React.FC = () => {
       }
 
       if (usersResponse && typeof usersResponse === 'object') {
-        setUsers(usersResponse.users || []);
-        setTotalUsers(usersResponse.total || 0);
       } else {
-        setUsers([]);
-        setTotalUsers(0);
       }
     } catch (err) {
       console.error('Failed to fetch data:', err);
@@ -593,7 +539,6 @@ const BookManagement: React.FC = () => {
           onClick={handleRefresh}
           disabled={isLoading}
           className="absolute top-4 right-4 p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50"
-          title="Refresh Data"
         >
           <RefreshCw className={`w-4 h-4 text-white ${isLoading ? 'animate-spin' : ''}`} />
         </button>
@@ -795,10 +740,7 @@ const BookManagement: React.FC = () => {
                           </span>
                           {!book.is_available && fineStatusCache[book.id] && (
                             <div className="relative group">
-                              <DollarSign
-                                className="w-4 h-4 text-red-500"
-                                title="Has pending fines"
-                              />
+                              <DollarSign className="w-4 h-4 text-red-500" />
                               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-red-600 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
                                 Pending fines
                               </div>
@@ -823,7 +765,6 @@ const BookManagement: React.FC = () => {
                             onClick={() => handleEditBook(book)}
                             disabled={isOperationLoading}
                             className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded disabled:opacity-50"
-                            title="Edit Book"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
@@ -831,7 +772,6 @@ const BookManagement: React.FC = () => {
                             onClick={() => handleDeleteBook(book)}
                             disabled={isOperationLoading}
                             className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded disabled:opacity-50"
-                            title="Delete Book"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

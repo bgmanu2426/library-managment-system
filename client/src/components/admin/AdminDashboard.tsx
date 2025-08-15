@@ -541,7 +541,7 @@ const AdminDashboard: React.FC = () => {
 
           {/* Overdue Books - Enhanced with click-through */}
           <div
-            className={`bg-white rounded-lg lg:rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-all cursor-pointer ${overdueStatus.bgColor} border-l-4 ${
+            className={`bg-white rounded-lg lg:rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-all ${overdueStatus.bgColor} border-l-4 ${
               stats.overdue_books > 0 ? 'border-red-500' : 'border-emerald-500'
             }`}
           >
