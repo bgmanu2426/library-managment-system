@@ -10,7 +10,6 @@ const Login: React.FC = () => {
     {}
   );
   const { login, isLoading, loginInProgress, error: authError } = useAuth();
-  const [formTouched, setFormTouched] = useState(false);
   const [loginAttempted, setLoginAttempted] = useState(false);
 
   // Combine local and auth context errors
@@ -77,17 +76,15 @@ const Login: React.FC = () => {
       setEmail('admin@lms.com');
       setPassword('admin@1234');
     } else {
-      setEmail('john.doe@example.com');
-      setPassword('password123');
+      setEmail('one@one.com');
+      setPassword('one@1');
     }
-    setFormTouched(true);
     setLoginAttempted(false);
     setLocalError('');
     setValidationErrors({});
   };
 
   const handleInputChange = (field: 'email' | 'password', value: string) => {
-    setFormTouched(true);
     if (field === 'email') {
       setEmail(value);
     } else {

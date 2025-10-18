@@ -127,7 +127,7 @@ const UserProfile: React.FC = () => {
       errors.mobile = 'Mobile number is required';
     } else if (
       editedUser?.mobile &&
-      !/^\+?[\d\s\-\(\)]{10,}$/.test(editedUser.mobile.replace(/\D/g, ''))
+      !/^\+?[\d\s\-()]{10,}$/.test(editedUser.mobile.replace(/\D/g, ''))
     ) {
       errors.mobile = 'Please enter a valid mobile number';
     }

@@ -575,11 +575,18 @@ export interface DetailedApiError {
   message: string;
   details?: string;
   field?: string;
-  value?: any;
+  value?: unknown;
 }
 
-export interface EnhancedApiErrorResponse extends ApiErrorResponse {
+export interface EnhancedApiErrorResponse {
+  detail: string;
+  status_code?: number;
+  message?: string;
+  error_code?: string;
+  error_type?: string;
   errors?: DetailedApiError[];
+  actionable_message?: string;
+  retry_after?: number;
   suggestion?: string;
   documentation_url?: string;
 }
@@ -595,6 +602,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
+  loginInProgress: boolean;
   token: string | null;
   error?: string | null;
   checkToken?: () => Promise<void>;
@@ -653,8 +661,10 @@ export interface BookCirculationReportParams extends ReportDateRange {
   genre?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface OverdueSummaryReportParams extends ReportDateRange {}
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface InventoryStatusReportParams {}
 
 // Statistics interfaces for dashboard
@@ -753,7 +763,7 @@ export interface TableColumn<T> {
   key: keyof T;
   label: string;
   sortable?: boolean;
-  render?: (value: any, item: T) => React.ReactNode;
+  render?: (value: T[keyof T], item: T) => React.ReactNode;
 }
 
 export interface TableProps<T> {

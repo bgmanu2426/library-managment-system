@@ -10,13 +10,9 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  Award,
-  Star,
   Target,
-  Loader2,
   RefreshCw,
   Loader,
-  Search,
   XCircle,
   Info,
 } from 'lucide-react';
@@ -47,7 +43,6 @@ const Reports: React.FC = () => {
   });
   const [customDateRange, setCustomDateRange] = useState('last30days');
   const [isLoading, setIsLoading] = useState(true);
-  const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [isReportGenerating, setIsReportGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{
@@ -367,7 +362,7 @@ const Reports: React.FC = () => {
   const getDateRangeParams = () => {
     const now = new Date();
     let startDate: string;
-    let endDate = now.toISOString();
+    const endDate = now.toISOString();
 
     switch (customDateRange) {
       case 'last7days':
@@ -872,7 +867,7 @@ const Reports: React.FC = () => {
         57
       );
 
-      let yPosition = 70;
+      const yPosition = 70;
 
       switch (reportType) {
         case 'user-activity':

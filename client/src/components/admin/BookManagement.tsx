@@ -269,7 +269,7 @@ const BookManagement: React.FC = () => {
       const matchesFilter =
         filterStatus === 'all' ||
         (filterStatus === 'available' && Boolean(book.is_available)) ||
-        (filterStatus === 'issued' && !Boolean(book.is_available));
+        (filterStatus === 'issued' && !book.is_available);
       return matchesFilter;
     });
   }, [searchTerm, searchResults, books, filterStatus]);

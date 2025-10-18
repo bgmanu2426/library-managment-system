@@ -61,6 +61,7 @@ const OverdueManagement: React.FC = () => {
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [totalFines, setTotalFines] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);

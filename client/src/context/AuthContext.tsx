@@ -1,13 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, AuthContextType } from '../types';
-import {
-  getApiUrl,
-  createAuthenticatedRequest,
-  API_ENDPOINTS,
-  login as apiLogin,
-  verifyToken,
-  logout as apiLogout,
-} from '../utils/api';
+import { login as apiLogin, verifyToken, logout as apiLogout } from '../utils/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -142,21 +135,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [getToken, TOKEN_KEY, USER_KEY]);
 
-  // Define useAuth inside the component before the return statement
-  const useAuth = (): AuthContextType => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-      throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
-  };
-
   const contextValue: AuthContextType = {
     user,
     login,
     logout,
     isLoading,
     loginInProgress,
+    token: getToken(),
     error,
     checkToken,
   };

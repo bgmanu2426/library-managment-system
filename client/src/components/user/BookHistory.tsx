@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   BookOpen,
@@ -8,13 +8,12 @@ import {
   AlertTriangle,
   Filter,
   Search,
-  ArrowLeft,
   DollarSign,
   RefreshCw,
   Loader,
 } from 'lucide-react';
-import { getBookHistory, getCurrentBooks, getUserProfile } from '../../utils/api';
-import { BookHistoryResponse, User } from '../../types';
+import { getBookHistory } from '../../utils/api';
+import { BookHistoryResponse } from '../../types';
 
 const BookHistory: React.FC = () => {
   const { user } = useAuth();
@@ -108,7 +107,7 @@ const BookHistory: React.FC = () => {
     };
 
     fetchBookHistory();
-  }, [user, page, limit, filterStatus, refreshKey]);
+  }, [user, page, limit, filterStatus, refreshKey, userHistory]);
 
   // Auto-refresh every 30 seconds for current books
   useEffect(() => {
@@ -441,7 +440,9 @@ const BookHistory: React.FC = () => {
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <select
                 value={filterStatus}
-                onChange={e => handleFilterChange(e.target.value as any)}
+                onChange={e =>
+                  handleFilterChange(e.target.value as 'all' | 'current' | 'returned' | 'overdue')
+                }
                 className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white"
               >
                 <option value="all">All Records</option>

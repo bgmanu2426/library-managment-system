@@ -28,7 +28,7 @@ class ErrorBoundary extends React.Component<
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(_: Error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
 
@@ -96,7 +96,10 @@ const AdminDashboard: React.FC = () => {
           setTimeout(() => reject(new Error('Request timeout')), 15000)
         );
 
-        const dashboardStats = (await Promise.race([dashboardPromise, timeoutPromise])) as any;
+        const dashboardStats = (await Promise.race([
+          dashboardPromise,
+          timeoutPromise,
+        ])) as DashboardStats;
 
         if (!dashboardStats) {
           throw new Error('Failed to fetch dashboard statistics. Please try again.');

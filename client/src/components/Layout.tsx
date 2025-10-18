@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getUserDashboardStats, getFines, getCurrentBooks } from '../utils/api';
+import { FineResponse, CurrentBookResponse, OverdueBookResponse } from '../types';
 import {
   BookOpen,
   LayoutDashboard,
@@ -29,6 +31,19 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<
+    Array<{
+      id: string;
+      type: 'info' | 'warning' | 'error';
+      title: string;
+      description?: string;
+      action?: { label: string; onClick: () => void };
+    }>
+  >([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifError, setNotifError] = useState<string | null>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Simulate loading transition when page changes
@@ -40,10 +55,136 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     return () => clearTimeout(timer);
   }, [currentPage]);
 
-  // Simulate notifications (remove in production)
+  // Build notifications from API data
   useEffect(() => {
-    setNotificationCount(Math.floor(Math.random() * 5));
-  }, []);
+    if (!user) return;
+
+    let isMounted = true;
+    const TOKEN_KEY = import.meta.env.VITE_TOKEN_KEY || 'library_token';
+    const fetchNotifications = async () => {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (!token) {
+        if (isMounted) {
+          setNotifications([]);
+          setNotificationCount(0);
+        }
+        return;
+      }
+
+      setNotifLoading(true);
+      setNotifError(null);
+      try {
+        const [stats, finesResult, currentBooksResult] = await Promise.all([
+          getUserDashboardStats(token).catch(() => null),
+          getFines(token, 'pending').catch(() => ({ fines: [] }) as { fines: FineResponse[] }),
+          getCurrentBooks(token).catch(() => ({ books: [] })),
+        ]);
+
+        const items: Array<{
+          id: string;
+          type: 'info' | 'warning' | 'error';
+          title: string;
+          description?: string;
+          action?: { label: string; onClick: () => void };
+        }> = [];
+
+        // Overdue summary
+        const overdueCount = stats?.overdue_books_count || 0;
+        if (overdueCount > 0) {
+          items.push({
+            id: 'overdue-summary',
+            type: 'warning',
+            title: `You have ${overdueCount} overdue book${overdueCount > 1 ? 's' : ''}`,
+            description: 'Please return them or settle fines to avoid penalties.',
+          });
+        }
+
+        // Overdue details (limit 3)
+        const overdueList: OverdueBookResponse[] = Array.isArray(stats?.overdue_books)
+          ? (stats?.overdue_books as OverdueBookResponse[])
+          : [];
+        overdueList.slice(0, 3).forEach((b: OverdueBookResponse, idx: number) => {
+          const days = typeof b?.days_overdue === 'number' ? b.days_overdue : undefined;
+          items.push({
+            id: `overdue-${b?.book_isbn || b?.book_id || idx}`,
+            type: 'warning',
+            title: `Overdue: ${b?.book_title || 'Book'}`,
+            description:
+              days !== undefined ? `${days} day${days === 1 ? '' : 's'} overdue` : undefined,
+          });
+        });
+
+        // Pending fines
+        const finesArrayMaybe = (finesResult as { fines: FineResponse[] })?.fines;
+        const fines: FineResponse[] = Array.isArray(finesArrayMaybe) ? finesArrayMaybe : [];
+        if (fines.length > 0) {
+          const total = fines.reduce(
+            (sum: number, f: FineResponse) => sum + (f.fine_amount || 0),
+            0
+          );
+          items.push({
+            id: 'pending-fines',
+            type: 'error',
+            title: `You have ${fines.length} pending fine${fines.length > 1 ? 's' : ''}`,
+            description: `Total due: ₹${total.toFixed(2)}`,
+          });
+        }
+
+        // Due soon (within 3 days)
+        const now = new Date();
+        const soonThresholdMs = 3 * 24 * 60 * 60 * 1000;
+        const currentBooks: CurrentBookResponse[] = Array.isArray(currentBooksResult?.books)
+          ? (currentBooksResult.books as CurrentBookResponse[])
+          : [];
+        const dueSoon = currentBooks.filter((b: CurrentBookResponse) => {
+          if (!b?.due_date) return false;
+          const due = new Date(b.due_date);
+          const diff = due.getTime() - now.getTime();
+          return diff > 0 && diff <= soonThresholdMs;
+        });
+        if (dueSoon.length > 0) {
+          items.push({
+            id: 'due-soon',
+            type: 'info',
+            title: `${dueSoon.length} book${dueSoon.length > 1 ? 's are' : ' is'} due soon`,
+            description: 'Return on time to avoid fines.',
+          });
+        }
+
+        if (isMounted) {
+          setNotifications(items);
+          setNotificationCount(items.length);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setNotifError(err instanceof Error ? err.message : 'Failed to load notifications');
+        }
+      } finally {
+        if (isMounted) setNotifLoading(false);
+      }
+    };
+
+    // Initial fetch
+    fetchNotifications();
+    // Refresh periodically
+    const intervalId = window.setInterval(fetchNotifications, 60_000);
+
+    return () => {
+      isMounted = false;
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, [user]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (isNotificationsOpen && notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [isNotificationsOpen]);
 
   if (isLoading) {
     return (
@@ -219,15 +360,92 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
             {/* Right side items */}
             <div className="flex items-center space-x-4">
               {/* Notifications */}
-              <div className="relative">
-                <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+              <div className="relative" ref={notifRef}>
+                <button
+                  className="p-2 rounded-full hover:bg-gray-100 transition-colors relative"
+                  aria-haspopup="true"
+                  aria-expanded={isNotificationsOpen}
+                  onClick={() => setIsNotificationsOpen(v => !v)}
+                >
                   <Bell className="w-5 h-5 text-gray-600" />
                   {notificationCount > 0 && (
-                    <span className="absolute top-0 right-0 h-4 w-4 text-xs flex items-center justify-center bg-red-500 text-white rounded-full">
+                    <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 text-[10px] px-1 flex items-center justify-center bg-red-500 text-white rounded-full">
                       {notificationCount}
                     </span>
                   )}
                 </button>
+
+                {isNotificationsOpen && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                    <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                      <span className="text-sm font-semibold text-gray-700">Notifications</span>
+                      <button
+                        className="text-xs text-blue-600 hover:underline disabled:text-gray-400"
+                        disabled={notifications.length === 0}
+                        onClick={() => {
+                          setNotifications([]);
+                          setNotificationCount(0);
+                        }}
+                      >
+                        Mark all as read
+                      </button>
+                    </div>
+
+                    <div className="max-h-80 overflow-auto">
+                      {notifLoading && (
+                        <div className="py-6 flex items-center justify-center text-gray-500 text-sm">
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading...
+                        </div>
+                      )}
+
+                      {!notifLoading && notifError && (
+                        <div className="p-4 text-sm text-red-600">{notifError}</div>
+                      )}
+
+                      {!notifLoading && !notifError && notifications.length === 0 && (
+                        <div className="p-4 text-sm text-gray-500">You're all caught up.</div>
+                      )}
+
+                      {!notifLoading && !notifError && notifications.length > 0 && (
+                        <ul className="divide-y divide-gray-100">
+                          {notifications.map(n => (
+                            <li key={n.id} className="p-3 hover:bg-gray-50">
+                              <div className="flex items-start">
+                                {(() => {
+                                  const dotColor =
+                                    n.type === 'error'
+                                      ? 'bg-red-500'
+                                      : n.type === 'warning'
+                                        ? 'bg-amber-500'
+                                        : 'bg-blue-500';
+                                  return (
+                                    <span
+                                      className={`mt-1 mr-3 inline-block w-2 h-2 rounded-full ${dotColor}`}
+                                    />
+                                  );
+                                })()}
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-800">{n.title}</p>
+                                  {n.description && (
+                                    <p className="text-xs text-gray-500 mt-0.5">{n.description}</p>
+                                  )}
+                                  {n.action && (
+                                    <button
+                                      className="mt-2 text-xs text-blue-600 hover:underline"
+                                      onClick={n.action.onClick}
+                                    >
+                                      {n.action.label}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* User info in header for larger screens */}

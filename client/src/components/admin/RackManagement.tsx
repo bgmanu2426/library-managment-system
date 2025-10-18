@@ -3,7 +3,6 @@ import {
   Archive,
   Plus,
   Search,
-  Filter,
   Edit3,
   Trash2,
   Package,
@@ -13,9 +12,7 @@ import {
   RefreshCw,
   Loader,
   CheckCircle,
-  BarChart3,
   TrendingUp,
-  Database,
 } from 'lucide-react';
 import { getRacks, createRack, updateRack, deleteRack, getShelves } from '../../utils/api';
 import { Rack, Shelf, RackCreatePayload, RackUpdatePayload } from '../../types';

@@ -38,6 +38,7 @@ import {
   Shelf,
   RackCreatePayload,
   ShelfCreatePayload,
+  RecentActivity,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
@@ -65,7 +66,7 @@ const InventoryManagement: React.FC = () => {
   const { user } = useAuth();
   const [books, setBooks] = useState<BookType[]>([]);
   const [users, setUsers] = useState<UserType[]>([]);
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +86,7 @@ const InventoryManagement: React.FC = () => {
 
   // Rack and Shelf Management States
   const [racks, setRacks] = useState<Rack[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [shelves, setShelves] = useState<Shelf[]>([]);
   const [showAddRackModal, setShowAddRackModal] = useState(false);
   const [showAddShelfModal, setShowAddShelfModal] = useState(false);
@@ -258,7 +260,7 @@ const InventoryManagement: React.FC = () => {
     const matchesFilter =
       statusFilter === 'all' ||
       (statusFilter === 'available' && Boolean(book.is_available)) ||
-      (statusFilter === 'issued' && !Boolean(book.is_available));
+      (statusFilter === 'issued' && !book.is_available);
     return matchesFilter;
   });
 
@@ -775,10 +777,10 @@ const InventoryManagement: React.FC = () => {
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                             <div
                               className={`flex items-center space-x-2 ${
-                                Boolean(book.is_available) ? 'text-emerald-600' : 'text-amber-600'
+                                book.is_available ? 'text-emerald-600' : 'text-amber-600'
                               }`}
                             >
-                              {Boolean(book.is_available) ? (
+                              {book.is_available ? (
                                 <CheckCircle className="w-4 h-4" />
                               ) : (
                                 <Clock className="w-4 h-4" />
@@ -787,7 +789,7 @@ const InventoryManagement: React.FC = () => {
                                 {book.is_available ? 'Available' : 'Issued'}
                               </span>
                             </div>
-                            {!Boolean(book.is_available) && book.return_date && (
+                            {!book.is_available && book.return_date && (
                               <div className="text-xs text-gray-500 mt-1">
                                 Due: {new Date(book.return_date).toLocaleDateString()}
                               </div>
@@ -795,7 +797,7 @@ const InventoryManagement: React.FC = () => {
                           </td>
                           <td className="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">
-                              {Boolean(book.is_available) ? (
+                              {book.is_available ? (
                                 <button
                                   onClick={() => {
                                     setIssueData(prev => ({ ...prev, bookId: book.id.toString() }));
