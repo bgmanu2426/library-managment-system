@@ -1,14 +1,12 @@
-from auth import get_current_user  # Import authentication dependency
 from routers import admin, user, overdue, reports, auth
 from seed_data import initialize_database
-from models import User
 from database import create_db_and_tables
 from datetime import datetime
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import List
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Request, Response, status, HTTPException, Depends
+from fastapi import FastAPI, Request, Response, status, HTTPException
 from urllib.parse import unquote
 import traceback
 import json
@@ -683,23 +681,6 @@ def root_redirect():
 def health_check():
     return {
         "status": "ok"
-    }
-
-# Authentication test endpoint
-
-
-@app.get("/api/auth-test", tags=["Authentication"])
-async def auth_test(current_user: User = Depends(get_current_user)):
-    """Test endpoint for validating authentication."""
-    return {
-        "status": "ok",
-        "message": "Authentication successful",
-        "user": {
-            "id": current_user.id,
-            "name": current_user.name,
-            "role": current_user.role,
-            "email": current_user.email
-        }
     }
 
 # Startup event to create database and seed data

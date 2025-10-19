@@ -464,6 +464,7 @@ export const login = async (
     const formData = new FormData();
     formData.append('username', email.trim());
     formData.append('password', password);
+    formData.append('grant_type', 'password'); // Required by OAuth2PasswordRequestForm
 
     const response = await fetch(getApiUrl(API_ENDPOINTS.LOGIN), {
       method: 'POST',

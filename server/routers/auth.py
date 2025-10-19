@@ -1,15 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlmodel import Session
-from typing import Dict, Any
+from sqlmodel import Session, select
 import time
 from datetime import datetime
-import re
 import logging_config
 
 from database import get_session
 from models import User, LoginResponse, TokenVerifyResponse
-from auth import authenticate_user, create_access_token, get_current_user
+from auth import authenticate_user, create_access_token
 
 # Get API logger from logging configuration
 api_logger = logging_config.get_logger('api')
@@ -17,7 +15,6 @@ api_logger = logging_config.get_logger('api')
 router = APIRouter()
 
 @router.post("/login", response_model=LoginResponse)
-@router.get("/login", response_model=LoginResponse, include_in_schema=False)  # Added GET method for development purposes
 async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
     """Universal login endpoint for both admin and regular users"""
     correlation_id = logging_config.get_correlation_id()
@@ -27,7 +24,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     username_safe = form_data.username[:3] + "*" * (len(form_data.username) - 3) if form_data.username else "unknown"
     
     # Get client IP address for security logging
-    client_ip = request.client.host if request else "unknown"
+    client_ip = request.client.host if request.client else "unknown"
     client_agent = request.headers.get("user-agent", "unknown")
     
     # Log login attempt with sanitized data
@@ -106,23 +103,20 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         )
 
 @router.post("/logout")
-async def logout(request: Request, current_user: User = Depends(get_current_user)):
-    """Logout endpoint for authenticated users"""
+async def logout(request: Request):
+    """Logout endpoint - Public access"""
     correlation_id = logging_config.get_correlation_id()
     start_time = time.time()
     
     # Get client IP address for security logging
-    client_ip = request.client.host if request else "unknown"
+    client_ip = request.client.host if request.client else "unknown"
     
-    api_logger.info(f"[{correlation_id}] Logout request for user: {current_user.email} (ID: {current_user.id}) from IP {client_ip}")
+    api_logger.info(f"[{correlation_id}] Logout request from IP {client_ip}")
     
     try:
         # In a JWT-based system, logout is typically handled client-side by removing the token
         # Server-side logout would require token blacklisting which is not implemented here
-        api_logger.info(f"[{correlation_id}] Logout successful for user: {current_user.email} (ID: {current_user.id}) from IP {client_ip}")
-        
-        # Security audit trail for logout
-        api_logger.info(f"[{correlation_id}] Authentication state change: User {current_user.id} ({current_user.name}) logged out from IP {client_ip}")
+        api_logger.info(f"[{correlation_id}] Logout successful from IP {client_ip}")
         
         # Performance logging
         total_duration = time.time() - start_time
@@ -130,13 +124,12 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
         
         return {
             "message": "Successfully logged out",
-            "user_id": current_user.id,
             "timestamp": datetime.utcnow().isoformat()
         }
         
     except Exception as e:
         # Log error with correlation ID
-        logging_config.log_error(api_logger, f"Error during logout for user {current_user.id} from IP {client_ip}: {str(e)}", correlation_id=correlation_id)
+        logging_config.log_error(api_logger, f"Error during logout from IP {client_ip}: {str(e)}", correlation_id=correlation_id)
         
         # Performance logging for failed logout
         total_duration = time.time() - start_time
@@ -148,35 +141,65 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
         )
 
 @router.get("/verify-token", response_model=TokenVerifyResponse)
-async def verify_token(request: Request, current_user: User = Depends(get_current_user)):
-    """Verify authentication token and return user information"""
+async def verify_token_endpoint(request: Request, session: Session = Depends(get_session)):
+    """Verify authentication token and return user information - Public access"""
     correlation_id = logging_config.get_correlation_id()
     start_time = time.time()
     
     # Get client IP address for security logging
-    client_ip = request.client.host if request else "unknown"
+    client_ip = request.client.host if request.client else "unknown"
     
     # Log token verification attempt
-    logging_config.log_api_operation(f"Token verification request - User ID: {current_user.id}, IP: {client_ip}", correlation_id=correlation_id)
+    logging_config.log_api_operation(f"Token verification request from IP {client_ip}", correlation_id=correlation_id)
     
     try:
-        # Log successful token verification details
-        api_logger.info(f"[{correlation_id}] Token verification successful for user: {current_user.email} (ID: {current_user.id}, Role: {current_user.role}) from IP {client_ip}")
+        # Get token from Authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing or invalid authorization header",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
-        # Prepare response with user details
-        user_data = {
-            "id": current_user.id,
-            "name": current_user.name,
-            "email": current_user.email,
-            "role": current_user.role
-        }
+        token = auth_header[7:]  # Remove "Bearer " prefix
         
+        # Verify the token using jwt.decode
+        from jose import jwt
+        SECRET_KEY = __import__('auth').SECRET_KEY
+        ALGORITHM = __import__('auth').ALGORITHM
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token - missing user information",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Fetch user from database
+        query = select(User).where(User.id == int(user_id))
+        user = session.exec(query).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+            )
+        
+        # Return user information
         response_data = {
             "valid": True,
-            "user": user_data
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "role": user.role
+            }
         }
         
-        logging_config.log_api_operation(f"Token verified for user {current_user.id} ({current_user.role})", correlation_id=correlation_id)
+        logging_config.log_api_operation(f"Token verified for user {user_id}", correlation_id=correlation_id)
         
         # Performance logging
         total_duration = time.time() - start_time
@@ -184,41 +207,81 @@ async def verify_token(request: Request, current_user: User = Depends(get_curren
         
         return response_data
         
+    except HTTPException:
+        # Performance logging for failed verification
+        total_duration = time.time() - start_time
+        logging_config.log_performance(api_logger, "Token verification (failed)", total_duration, correlation_id)
+        raise
     except Exception as e:
         # Log error with correlation ID
-        user_id = getattr(current_user, 'id', 'unknown')
-        logging_config.log_error(api_logger, f"Unexpected error during token verification for user {user_id} from IP {client_ip}: {str(e)}", correlation_id=correlation_id)
+        logging_config.log_error(api_logger, f"Unexpected error during token verification from IP {client_ip}: {str(e)}", correlation_id=correlation_id)
         
         # Performance logging for failed verification
         total_duration = time.time() - start_time
         logging_config.log_performance(api_logger, "Token verification (failed)", total_duration, correlation_id)
         
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Token verification system error",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token verification failed",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 @router.get("/me")
-async def get_current_user_info(request: Request, current_user: User = Depends(get_current_user)):
-    """Get current authenticated user information"""
+async def get_current_user_info(request: Request, session: Session = Depends(get_session)):
+    """Get current authenticated user information - Public access"""
     correlation_id = logging_config.get_correlation_id()
     start_time = time.time()
     
     # Get client IP address for security logging
-    client_ip = request.client.host if request else "unknown"
+    client_ip = request.client.host if request.client else "unknown"
     
-    logging_config.log_api_operation(f"User info request - User ID: {current_user.id}, IP: {client_ip}", correlation_id=correlation_id)
+    logging_config.log_api_operation(f"User info request from IP {client_ip}", correlation_id=correlation_id)
     
     try:
+        # Get token from Authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing or invalid authorization header",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        token = auth_header[7:]  # Remove "Bearer " prefix
+        
+        # Verify the token using jwt.decode
+        from jose import jwt
+        SECRET_KEY = __import__('auth').SECRET_KEY
+        ALGORITHM = __import__('auth').ALGORITHM
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token - missing user information",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Fetch user from database
+        query = select(User).where(User.id == int(user_id))
+        user = session.exec(query).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        
         user_info = {
-            "id": current_user.id,
-            "name": current_user.name,
-            "email": current_user.email,
-            "role": current_user.role,
-            "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "created_at": user.created_at.isoformat() if user.created_at else None
         }
         
-        api_logger.debug(f"[{correlation_id}] User info retrieved for user {current_user.id} from IP {client_ip}")
+        api_logger.debug(f"[{correlation_id}] User info retrieved for user {user.id} from IP {client_ip}")
         
         # Performance logging
         total_duration = time.time() - start_time
@@ -226,78 +289,20 @@ async def get_current_user_info(request: Request, current_user: User = Depends(g
         
         return user_info
         
+    except HTTPException:
+        # Performance logging for failed operation
+        total_duration = time.time() - start_time
+        logging_config.log_performance(api_logger, "User info retrieval (failed)", total_duration, correlation_id)
+        raise
     except Exception as e:
         # Log error with correlation ID
-        logging_config.log_error(api_logger, f"Error retrieving user info for user {current_user.id} from IP {client_ip}: {str(e)}", correlation_id=correlation_id)
+        logging_config.log_error(api_logger, f"Error retrieving user info from IP {client_ip}: {str(e)}", correlation_id=correlation_id)
         
         # Performance logging for failed operation
         total_duration = time.time() - start_time
         logging_config.log_performance(api_logger, "User info retrieval (failed)", total_duration, correlation_id)
         
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User information retrieval error",
         )
-
-@router.get("/token-debug")
-async def debug_token(request: Request):
-    """Debug endpoint to check token parsing without validation"""
-    correlation_id = logging_config.get_correlation_id()
-    client_ip = request.client.host if request else "unknown"
-    
-    api_logger.info(f"[{correlation_id}] Token debug endpoint accessed from IP {client_ip}")
-    
-    try:
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            api_logger.warning(f"[{correlation_id}] Token debug - No Authorization header provided from IP {client_ip}")
-            return {
-                "valid": False,
-                "error": "No Authorization header provided",
-                "header_present": False
-            }
-            
-        # Check Bearer token format
-        token_match = re.match(r"Bearer\s+(.+)", auth_header)
-        if not token_match:
-            api_logger.warning(f"[{correlation_id}] Token debug - Invalid Authorization format from IP {client_ip}")
-            return {
-                "valid": False,
-                "error": "Invalid Authorization header format, expected 'Bearer {token}'",
-                "header_present": True,
-                "header_format_valid": False,
-                "header_preview": auth_header[:15] + "..." if len(auth_header) > 15 else auth_header
-            }
-            
-        token = token_match.group(1)
-        token_parts = token.split('.')
-        
-        if len(token_parts) != 3:
-            api_logger.warning(f"[{correlation_id}] Token debug - Invalid JWT format (expected 3 parts) from IP {client_ip}")
-            return {
-                "valid": False,
-                "error": "Token is not in valid JWT format (header.payload.signature)",
-                "header_present": True,
-                "header_format_valid": True,
-                "token_format_valid": False,
-                "token_parts_count": len(token_parts),
-                "token_preview": token[:10] + "..."
-            }
-            
-        # Return debug information without validating the token
-        api_logger.info(f"[{correlation_id}] Token debug completed successfully from IP {client_ip}")
-        return {
-            "header_present": True,
-            "header_format_valid": True,
-            "token_format_valid": True,
-            "token_parts_count": len(token_parts),
-            "token_preview": token[:10] + "...",
-            "note": "This endpoint only checks token format, not validity"
-        }
-        
-    except Exception as e:
-        logging_config.log_error(api_logger, f"Error in token debug endpoint: {str(e)}", correlation_id=correlation_id)
-        return {
-            "error": "Error processing token debug request",
-            "message": str(e)
-        }

@@ -230,7 +230,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -242,7 +242,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
       {/* Sidebar */}
       <div
         className={`
-        fixed inset-y-0 left-0 z-50 w-64 md:w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+        fixed inset-y-0 left-0 z-50 w-64 md:w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex-shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}
       >
@@ -335,9 +335,9 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+        <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0 z-10">
           <div className="flex items-center justify-between h-16 px-4 lg:px-6">
             <div className="flex items-center space-x-4">
               <button
