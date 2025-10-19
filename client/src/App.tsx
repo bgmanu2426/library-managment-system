@@ -15,6 +15,7 @@ import RackManagement from './components/admin/RackManagement';
 import ShelfManagement from './components/admin/ShelfManagement';
 import Reports from './components/admin/Reports';
 import OverdueManagement from './components/admin/OverdueManagement';
+import APIKeyManagement from './components/admin/APIKeyManagement';
 
 const AppContent: React.FC = React.memo(() => {
   const { user, isLoading } = useAuth();
@@ -51,6 +52,8 @@ const AppContent: React.FC = React.memo(() => {
           return <Reports />;
         case 'overdue':
           return <OverdueManagement />;
+        case 'api-keys':
+          return <APIKeyManagement />;
         default:
           return <AdminDashboard />;
       }

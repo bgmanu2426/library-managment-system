@@ -12,14 +12,14 @@ class User(SQLModel, table=True):
     address: str
     role: str = Field(default="user")  # admin or user
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class Rack(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     description: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class Shelf(SQLModel, table=True):
@@ -28,7 +28,7 @@ class Shelf(SQLModel, table=True):
     rack_id: int = Field(foreign_key="rack.id")
     capacity: int
     current_books: int = Field(default=0)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class Book(SQLModel, table=True):
@@ -43,7 +43,7 @@ class Book(SQLModel, table=True):
     issued_to: Optional[int] = Field(default=None, foreign_key="user.id")
     issued_date: Optional[datetime] = Field(default=None)
     return_date: Optional[datetime] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class Transaction(SQLModel, table=True):
@@ -59,7 +59,7 @@ class Transaction(SQLModel, table=True):
     status: str = Field(default="current")  # current, returned, overdue
     days_overdue: Optional[int] = Field(default=None)
     fine_amount: Optional[float] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class Fine(SQLModel, table=True):
@@ -78,11 +78,22 @@ class Fine(SQLModel, table=True):
     due_date: datetime
     return_date: Optional[datetime] = Field(default=None)
     status: str = Field(default="pending")  # pending, paid, waived
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
     paid_at: Optional[datetime] = Field(default=None)
     waived_at: Optional[datetime] = Field(default=None)
     waived_by: Optional[int] = Field(default=None, foreign_key="user.id")
     notes: Optional[str] = Field(default=None)
+
+
+class APIKey(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    key: str = Field(unique=True, index=True)  # The actual API key
+    name: str  # Friendly name for the API key
+    user_id: int = Field(foreign_key="user.id")  # User who owns this API key
+    prefix: str  # First 8 characters for display (e.g., "lms_1234...")
+    last_used_at: Optional[datetime] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.now)
+    is_active: bool = Field(default=True)
 
 
 class LoginResponse(SQLModel):

@@ -18,6 +18,7 @@ import {
   Bell,
   Archive,
   Layers3,
+  Key,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -208,6 +209,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
     { id: 'shelves', label: 'Shelves', icon: Layers3 },
     { id: 'overdue', label: 'Overdue & Fines', icon: AlertTriangle },
     { id: 'reports', label: 'Reports', icon: BarChart3 },
+    { id: 'api-keys', label: 'API Keys', icon: Key },
   ];
 
   const userMenuItems = [

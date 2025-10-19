@@ -127,7 +127,7 @@ class DateRangeValidator(BaseModel):
 
     @validator('start_date', 'end_date')
     def validate_not_future(cls, v):
-        if v and v.replace(tzinfo=None) > datetime.utcnow():
+        if v and v.replace(tzinfo=None) > datetime.now():
             raise ValueError('Date cannot be in the future')
         return v
 
@@ -250,7 +250,7 @@ def parse_and_validate_datetime(date_param: Optional[str], param_name: str) -> O
             parsed_date = utc_date.replace(tzinfo=None)
         
         # Validate date is not too far in the future (allow small buffer for timezone differences)
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now()
         # Allow up to 24 hours in the future to account for timezone differences
         max_future_date = now_utc + timedelta(hours=24)
         
@@ -588,7 +588,7 @@ async def get_book_circulation_report(
                                 days = (transaction.return_date.replace(tzinfo=None) - transaction.issued_date.replace(tzinfo=None)).days
                                 total_days_borrowed += max(0, days)
                             elif transaction.status == "current" and transaction.issued_date:
-                                days = (datetime.utcnow().replace(tzinfo=None) - transaction.issued_date.replace(tzinfo=None)).days
+                                days = (datetime.now().replace(tzinfo=None) - transaction.issued_date.replace(tzinfo=None)).days
                                 total_days_borrowed += max(0, days)
                         except Exception as calc_error:
                             logging_config.log_error(api_logger, f"Error calculating days for transaction {transaction.id}: {str(calc_error)}", correlation_id=correlation_id)
@@ -729,7 +729,7 @@ async def get_overdue_summary_report(
                 for transaction in overdue_transactions:
                     if transaction and transaction.due_date:
                         # Calculate implied fine based on days overdue
-                        days_overdue = (datetime.utcnow().replace(tzinfo=None) - transaction.due_date.replace(tzinfo=None)).days
+                        days_overdue = (datetime.now().replace(tzinfo=None) - transaction.due_date.replace(tzinfo=None)).days
                         if days_overdue > 0:
                             implied_fine_amount = days_overdue * 5.0  # ₹5 per day default
                             total_pending_fines += implied_fine_amount
@@ -783,7 +783,7 @@ async def get_overdue_summary_report(
                             # Calculate days overdue if not explicitly available on transaction model
                             if transaction and transaction.issued_date and transaction.due_date:
                                 # Compare with current date if not returned, else with return_date
-                                compare_date = transaction.return_date.replace(tzinfo=None) if transaction.return_date else datetime.utcnow()
+                                compare_date = transaction.return_date.replace(tzinfo=None) if transaction.return_date else datetime.now()
                                 expected_return = transaction.due_date.replace(tzinfo=None)
 
                                 days = (compare_date - expected_return).days

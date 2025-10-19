@@ -11,6 +11,8 @@ import logging
 import re
 import os
 import warnings
+import secrets
+import hashlib
 from dotenv import load_dotenv
 
 # Suppress warnings for bcrypt compatibility issues
@@ -30,8 +32,7 @@ logger = logging.getLogger("auth")
 
 # Constants for JWT
 # Default fallback for development
-SECRET_KEY = os.getenv(
-    "SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
 
@@ -54,6 +55,8 @@ def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
     return pwd_context.hash(password)
 
+# verify the password with the hashed one
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against a hash."""
@@ -71,15 +74,17 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
         to_encode['sub'] = str(to_encode['sub'])
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
 
     to_encode.update({"exp": expire})
     logger.debug(
         f"Creating token for user_id={data.get('sub')} with expiration {expire}")
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# Verify the JWT token
 
 
 def verify_token(token: str) -> Dict[str, Any]:
@@ -172,10 +177,40 @@ def extract_token_from_header(authorization: str) -> Optional[str]:
 # Dependencies for protected routes
 
 
-async def get_current_user(request: Request, token: Optional[str] = Depends(oauth2_scheme), session: Session = Depends(get_session)) -> User:
-    """Get the current authenticated user with enhanced logging and error handling."""
-    logger.debug("Attempting to get current user")
+async def get_current_user(
+    request: Request, 
+    token: Optional[str] = Depends(oauth2_scheme), 
+    session: Session = Depends(get_session)
+) -> User:
+    """
+    Get the current authenticated user either via JWT token or API key.
+    This supports both Bearer token and API key authentication.
+    
+    Priority:
+    1. Check for API key in x-api-key header
+    2. Fall back to JWT token authentication
+    """
+    logger.debug("Attempting authentication via API key or JWT token")
 
+    # First, check for API key in x-api-key header
+    api_key = request.headers.get("x-api-key")
+    if api_key:
+        logger.debug("API key found in x-api-key header")
+        user = await verify_api_key(api_key, session)
+        if user:
+            logger.info(f"Authenticated via API key: user {user.email} (ID: {user.id})")
+            return user
+        else:
+            logger.warning("Invalid API key provided in x-api-key header")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key",
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+
+    # No API key found, fall back to JWT token authentication
+    logger.debug("No API key found, checking JWT token authentication")
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -184,23 +219,21 @@ async def get_current_user(request: Request, token: Optional[str] = Depends(oaut
 
     # If token is None, try to extract from Authorization header
     if token is None:
-        logger.debug(
-            "No token from oauth2_scheme, checking Authorization header")
+        logger.debug("No token from oauth2_scheme, checking Authorization header")
         authorization = request.headers.get("Authorization")
         if authorization:
             token = extract_token_from_header(authorization)
-            logger.debug(
-                f"Extracted token from header: {token[:15] if token else None}...")
+            logger.debug(f"Extracted token from header: {token[:15] if token else None}...")
         else:
-            logger.warning("No Authorization header found")
+            logger.warning("No Authorization header or API key found")
             raise credentials_exception
 
     # Still no token after checking header
     if not token:
-        logger.warning("No valid authentication token provided")
+        logger.warning("No valid authentication token or API key provided")
         raise credentials_exception
 
-    logger.debug(f"Processing token: {token[:15]}...")
+    logger.debug(f"Processing JWT token: {token[:15]}...")
 
     try:
         payload = verify_token(token)
@@ -218,16 +251,14 @@ async def get_current_user(request: Request, token: Optional[str] = Depends(oaut
         try:
             user_id = int(user_id_str)
         except ValueError:
-            logger.error(
-                f"Failed to convert user_id '{user_id_str}' to integer")
+            logger.error(f"Failed to convert user_id '{user_id_str}' to integer")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid user identifier format",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        logger.debug(
-            f"Token contains user_id: {user_id}, retrieving user from database")
+        logger.debug(f"Token contains user_id: {user_id}, retrieving user from database")
 
     except JWTError as e:
         logger.error(f"JWT error in get_current_user: {str(e)}")
@@ -243,21 +274,22 @@ async def get_current_user(request: Request, token: Optional[str] = Depends(oaut
     user = session.get(User, user_id)
 
     if user is None:
-        logger.warning(
-            f"User ID {user_id} from valid token not found in database")
+        logger.warning(f"User ID {user_id} from valid token not found in database")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    logger.debug(
-        f"Current user retrieved successfully: id={user.id}, email={user.email}, role={user.role}")
+    logger.debug(f"Current user retrieved successfully via JWT: id={user.id}, email={user.email}, role={user.role}")
     return user
 
 
 async def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Verify that the current user is an admin."""
+    """
+    Verify that the current user is an admin.
+    Automatically supports both JWT token and API key authentication via get_current_user.
+    """
     if current_user.role != "admin":
         logger.warning(
             f"Permission denied: User {current_user.id} ({current_user.email}) attempted admin access with role '{current_user.role}'")
@@ -266,6 +298,68 @@ async def get_current_admin(current_user: User = Depends(get_current_user)) -> U
             detail="Not enough permissions",
         )
 
-    logger.debug(
-        f"Admin access granted to user {current_user.id} ({current_user.email})")
+    logger.debug(f"Admin access granted to user {current_user.id} ({current_user.email})")
     return current_user
+
+
+# API Key functions
+
+def generate_api_key() -> tuple[str, str]:
+    """
+    Generate a secure API key similar to Claude's format.
+    Returns (full_key, prefix) where prefix is for display purposes.
+    Format: lms_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (40 chars after prefix)
+    """
+    # Generate a secure random key
+    random_part = secrets.token_urlsafe(30)  # Generates ~40 chars
+    full_key = f"lms_{random_part}"
+
+    # Create prefix for display (first 12 chars)
+    prefix = full_key[:12] + "..."
+
+    logger.info(f"Generated new API key with prefix: {prefix}")
+    return full_key, prefix
+
+
+def hash_api_key(api_key: str) -> str:
+    """Hash the API key for secure storage in database."""
+    return hashlib.sha256(api_key.encode()).hexdigest()
+
+
+async def verify_api_key(api_key: str, session: Session) -> Optional[User]:
+    """
+    Verify an API key and return the associated user.
+    Also updates the last_used_at timestamp.
+    """
+    from models import APIKey
+
+    logger.debug(f"Verifying API key: {api_key[:12]}...")
+
+    # Hash the provided key to compare with stored hash
+    key_hash = hash_api_key(api_key)
+
+    # Query for the API key
+    query = select(APIKey).where(APIKey.key == key_hash, APIKey.is_active)
+    api_key_obj = session.exec(query).first()
+
+    if not api_key_obj:
+        logger.warning(
+            f"Invalid or inactive API key attempted: {api_key[:12]}...")
+        return None
+
+    # Update last used timestamp
+    api_key_obj.last_used_at = datetime.now()
+    session.add(api_key_obj)
+    session.commit()
+
+    # Get the associated user
+    user = session.get(User, api_key_obj.user_id)
+
+    if not user:
+        logger.error(
+            f"API key {api_key_obj.id} associated with non-existent user {api_key_obj.user_id}")
+        return None
+
+    logger.info(
+        f"API key verified successfully for user: {user.email} (ID: {user.id})")
+    return user

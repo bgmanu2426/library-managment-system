@@ -103,6 +103,29 @@ export interface FineStatusCacheEntry {
   bookId: number;
 }
 
+// API Key interfaces
+export interface APIKey {
+  id: number;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  is_active: boolean;
+}
+
+export interface APIKeyCreateRequest {
+  name: string;
+}
+
+export interface APIKeyCreateResponse {
+  id: number;
+  name: string;
+  key: string;
+  prefix: string;
+  created_at: string;
+  message: string;
+}
+
 // API Request payload interfaces
 
 export interface LoginRequest {

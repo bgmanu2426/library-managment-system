@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging_config
 import time
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from math import ceil
-
 from database import get_session
-from models import Book, Transaction, Fine, User
+from models import Transaction, Fine, User
 from auth import get_current_admin, get_current_user
 
 # Get API logger from logging configuration
@@ -58,7 +57,7 @@ class PayFineRequest(BaseModel):
     payment_method: Optional[str] = Field("cash", description="Method of payment (cash, card, etc.)")
     notes: Optional[str] = Field(None, description="Optional notes about the payment")
     
-    @validator('payment_method')
+    @field_validator('payment_method')
     def validate_payment_method(cls, v):
         allowed_methods = ['cash', 'card', 'upi']
         if v and v.lower() not in allowed_methods:
@@ -69,7 +68,7 @@ class WaiveFineRequest(BaseModel):
     reason: str = Field(..., min_length=5, max_length=500, description="Reason for waiving the fine")
     notes: Optional[str] = Field(None, max_length=1000, description="Additional notes")
     
-    @validator('reason')
+    @field_validator('reason')
     def validate_reason(cls, v):
         if not v or not v.strip():
             raise ValueError("Reason cannot be empty")
@@ -113,7 +112,7 @@ async def get_overdue_books(
     logging_config.log_api_operation("Overdue books calculation started", correlation_id=correlation_id)
     
     try:
-        current_time = datetime.utcnow()
+        current_time = datetime.now()
         logging_config.log_api_operation(f"Overdue calculation timestamp: {current_time}", correlation_id=correlation_id)
         
         # Log business logic decision - fine calculation algorithm
@@ -420,7 +419,7 @@ async def calculate_fines(
             
         # Log business logic decision
         api_logger.info(f"[{correlation_id}] Fine calculation algorithm: ₹{FINE_PER_DAY} per day overdue")
-        current_time = datetime.utcnow()
+        current_time = datetime.now()
         logging_config.log_api_operation(f"Fine calculation timestamp: {current_time}", correlation_id=correlation_id)
         
         # Get all overdue transactions without existing fines
@@ -616,7 +615,7 @@ async def pay_fine(
         try:
             old_status = fine.status
             fine.status = "paid"
-            fine.paid_at = datetime.utcnow()
+            fine.paid_at = datetime.now()
             
             # Format notes with timestamp and admin name
             notes = f"Paid on {fine.paid_at.strftime('%Y-%m-%d %H:%M:%S')} by {current_admin.name} ({current_admin.usn})"
@@ -734,7 +733,7 @@ async def waive_fine(
         try:
             old_status = fine.status
             fine.status = "waived"
-            fine.waived_at = datetime.utcnow()
+            fine.waived_at = datetime.now()
             fine.waived_by = current_admin.id
             
             # Format notes with timestamp and reason
@@ -928,7 +927,7 @@ async def get_overdue_summary(
     logging_config.log_api_operation("Overdue summary statistics generation started", correlation_id=correlation_id)
     
     try:
-        current_time = datetime.utcnow()
+        current_time = datetime.now()
         logging_config.log_api_operation(f"Summary calculation timestamp: {current_time}", correlation_id=correlation_id)
         
         # Get all overdue transactions excluding those with paid fines with performance logging

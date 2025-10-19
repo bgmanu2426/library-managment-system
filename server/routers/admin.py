@@ -240,7 +240,7 @@ async def get_dashboard_stats(session: Session = Depends(get_session), current_a
         # Count overdue books (books that are issued and past due date)
         logging_config.log_api_operation(
             "Calculating overdue books count", correlation_id=correlation_id)
-        current_time = datetime.utcnow()
+        current_time = datetime.now()
         overdue_books = len(session.exec(
             select(Book).where(
                 Book.is_available == False,
@@ -1623,7 +1623,7 @@ async def issue_book(
             f"Updating book status for '{book.title}' (ID: {book.id}) to issued", correlation_id=correlation_id)
         book.is_available = False
         book.issued_to = issue_data.user_id
-        book.issued_date = datetime.utcnow()
+        book.issued_date = datetime.now()
         book.return_date = issue_data.due_date
 
         # Create transaction record
@@ -1635,7 +1635,7 @@ async def issue_book(
             book_title=book.title,
             book_author=book.author,
             book_isbn=book.isbn,
-            issued_date=datetime.utcnow(),
+            issued_date=datetime.now(),
             due_date=issue_data.due_date,
             status="current"
         )
@@ -1770,7 +1770,7 @@ async def return_book(
             )
 
         # Calculate the fine amount if the book is overdue
-        return_date = datetime.utcnow()
+        return_date = datetime.now()
         is_overdue = return_date > book.return_date if book.return_date else False
         fine_amount = 0
         days_overdue = 0

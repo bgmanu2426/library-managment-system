@@ -1,4 +1,4 @@
-from routers import admin, user, overdue, reports, auth
+from routers import admin, user, overdue, reports, auth, api_keys
 from seed_data import initialize_database
 from database import create_db_and_tables
 from datetime import datetime
@@ -17,8 +17,7 @@ import logging
 import os
 from dotenv import load_dotenv
 
-# Load environment variables before any other imports
-load_dotenv()
+load_dotenv() # Load environment variables
 
 
 # Initialize logging system
@@ -333,8 +332,6 @@ async def log_requests(request: Request, call_next):
         )
 
 # Request validation middleware for report endpoints
-
-
 @app.middleware("http")
 async def validate_request_parameters(request: Request, call_next):
     correlation_id = logging_config.get_correlation_id()
@@ -373,7 +370,7 @@ async def validate_request_parameters(request: Request, call_next):
                             # Convert to UTC for comparison if timezone aware
                             comparison_date = parsed_date.replace(
                                 tzinfo=None) if parsed_date.tzinfo else parsed_date
-                            if comparison_date > datetime.utcnow():
+                            if comparison_date > datetime.now():
                                 logging_config.log_error(
                                     api_logger, f"Future date provided for {date_param}: {decoded_date_value}", correlation_id=correlation_id)
                                 return JSONResponse(
@@ -473,8 +470,6 @@ async def validate_request_parameters(request: Request, call_next):
     return await call_next(request)
 
 # Enhanced error handling middleware for report endpoints
-
-
 @app.middleware("http")
 async def enhanced_error_handling(request: Request, call_next):
     correlation_id = logging_config.get_correlation_id()
@@ -557,7 +552,6 @@ async def enhanced_error_handling(request: Request, call_next):
         raise e
 
 # Special handler for OPTIONS requests (CORS preflight)
-
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Custom handler for HTTP exceptions with proper formatting."""
@@ -597,6 +591,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(api_keys.router, prefix="/api/api-keys", tags=["API Keys"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(user.router, prefix="/api/user", tags=["User"])
 app.include_router(overdue.router, prefix="/api/overdue", tags=["Overdue"])
@@ -696,8 +691,9 @@ def on_startup():
     api_logger.info(f"Server configured to run on {host}:{port}")
 
     # Initialize database
-    create_db_and_tables()
-    initialize_database()
+    
+    # create_db_and_tables()
+    # initialize_database()
     api_logger.info("Database initialized successfully")
 
     # Log environment information

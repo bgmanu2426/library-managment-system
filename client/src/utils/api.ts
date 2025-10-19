@@ -40,6 +40,12 @@ export const API_ENDPOINTS = {
   LOGOUT: '/api/auth/logout',
   VERIFY_TOKEN: '/api/auth/verify-token',
 
+  // API Keys
+  API_KEYS_GENERATE: '/api/api-keys/generate',
+  API_KEYS_LIST: '/api/api-keys/list',
+  API_KEYS_DELETE: '/api/api-keys/{api_key_id}',
+  API_KEYS_TOGGLE: '/api/api-keys/{api_key_id}/toggle',
+
   // Admin endpoints
   USERS: '/api/admin/users',
   BOOKS: '/api/admin/books',

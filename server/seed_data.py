@@ -361,7 +361,7 @@ def seed_sample_transactions(session: Session) -> bool:
             book = books[trans_data["book_idx"]]
             user = users[trans_data["user_idx"]]
             
-            issued_date = datetime.utcnow() - timedelta(days=trans_data["days_ago"])
+            issued_date = datetime.now() - timedelta(days=trans_data["days_ago"])
             due_date = issued_date + timedelta(days=trans_data["due_days"])
             
             transaction = Transaction(
@@ -384,7 +384,7 @@ def seed_sample_transactions(session: Session) -> bool:
             
             # Handle overdue transactions
             if trans_data["status"] == "overdue":
-                days_overdue = (datetime.utcnow() - due_date).days
+                days_overdue = (datetime.now() - due_date).days
                 fine_amount = days_overdue * 5.0
                 transaction.days_overdue = days_overdue
                 transaction.fine_amount = fine_amount
