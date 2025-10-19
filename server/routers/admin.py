@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from auth import get_current_admin, hash_password, get_current_user
+from auth import get_current_admin, hash_password
 from models import User, Book, Rack, Shelf, Transaction, Fine
 from database import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -100,13 +100,13 @@ class ReturnBookRequest(BaseModel):
 
 
 @router.get("/recent-activity", response_model=RecentActivityResponse)
-async def get_recent_activity(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+async def get_recent_activity(session: Session = Depends(get_session), current_admin: User = Depends(get_current_admin)):
     """Get recent activity including book issues, returns and user registrations"""
     correlation_id = logging_config.get_correlation_id()
     start_time = time.time()
 
     logging_config.log_api_operation(
-        f"Fetching recent activity for admin dashboard - User: {current_user.name} (ID: {current_user.id})", correlation_id=correlation_id)
+        f"Fetching recent activity for admin dashboard - User: {current_admin.name} (ID: {current_admin.id})", correlation_id=correlation_id)
 
     try:
         # Log database query operation
@@ -288,7 +288,11 @@ async def get_dashboard_stats(session: Session = Depends(get_session), current_a
 
 
 @router.post("/users")
-async def create_user(user_data: UserCreate, session: Session = Depends(get_session), current_admin: User = Depends(get_current_admin)):
+async def create_user(
+    user_data: UserCreate,
+    current_admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
     """Create a new user"""
     correlation_id = logging_config.get_correlation_id()
     start_time = time.time()
