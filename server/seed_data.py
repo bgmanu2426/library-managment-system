@@ -1,3 +1,4 @@
+-- Active: 1760966742747@@127.0.0.1@3306
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
@@ -13,7 +14,7 @@ def seed_admin_user(session: Session) -> bool:
     try:
         # Check if admin already exists
         admin_email = "admin@lms.com"
-        existing_admin = session.query(User).filter(User.email == admin_email).first()
+        existing_admin = session.exec(User).filter(User.email == admin_email).first()
         
         if existing_admin:
             print(f"Admin user already exists: {admin_email}")
@@ -45,7 +46,7 @@ def seed_racks_and_shelves(session: Session) -> bool:
     """Seed racks and shelves data"""
     try:
         # Check if racks already exist
-        existing_racks = session.query(Rack).first()
+        existing_racks = session.exec(Rack).first()
         if existing_racks:
             print("Racks already exist, skipping rack seeding")
             return False
@@ -110,14 +111,14 @@ def seed_books(session: Session) -> bool:
     """Seed sample books data"""
     try:
         # Check if books already exist
-        existing_books = session.query(Book).first()
+        existing_books = session.exec(Book).first()
         if existing_books:
             print("Books already exist, skipping book seeding")
             return False
         
         # Get racks and shelves
-        racks = session.query(Rack).all()
-        shelves = session.query(Shelf).all()
+        racks = session.exec(Rack).all()
+        shelves = session.exec(Shelf).all()
         
         if not racks or not shelves:
             print("No racks or shelves found, cannot seed books")
@@ -235,7 +236,7 @@ def seed_users(session: Session) -> bool:
     """Seed sample users data"""
     try:
         # Check if users already exist (excluding admin)
-        existing_users = session.query(User).filter(User.role == "user").first()
+        existing_users = session.exec(User).filter(User.role == "user").first()
         if existing_users:
             print("Users already exist, skipping user seeding")
             return False
@@ -289,14 +290,14 @@ def seed_sample_transactions(session: Session) -> bool:
     """Seed sample transactions with specific scenarios"""
     try:
         # Check if transactions already exist
-        existing_transactions = session.query(Transaction).first()
+        existing_transactions = session.exec(Transaction).first()
         if existing_transactions:
             print("Transactions already exist, skipping transaction seeding")
             return False
         
         # Get users and books
-        users = session.query(User).filter(User.role == "user").all()
-        books = session.query(Book).all()
+        users = session.exec(User).filter(User.role == "user").all()
+        books = session.exec(Book).all()
         
         if len(users) < 2 or len(books) < 10:
             print("Not enough users or books found, skipping transaction seeding")
@@ -406,12 +407,12 @@ def clear_existing_data(session: Session):
     """Clear existing database data to ensure clean state"""
     try:
         # Delete in reverse order of dependencies
-        session.query(Fine).delete()
-        session.query(Transaction).delete()
-        session.query(Book).delete()
-        session.query(Shelf).delete()
-        session.query(Rack).delete()
-        session.query(User).filter(User.role == "user").delete()
+        session.exec(Fine).delete()
+        session.exec(Transaction).delete()
+        session.exec(Book).delete()
+        session.exec(Shelf).delete()
+        session.exec(Rack).delete()
+        session.exec(User).filter(User.role == "user").delete()
         session.commit()
         print("Cleared existing database data")
     except Exception as e:

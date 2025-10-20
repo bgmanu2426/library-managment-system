@@ -152,7 +152,7 @@ const BookManagement: React.FC = () => {
         throw new Error('Authentication token not found');
       }
 
-      const [booksResponse, racksResponse, shelvesResponse, usersResponse] = await Promise.all([
+      const [booksResponse, racksResponse, shelvesResponse] = await Promise.all([
         getBooks(token, currentPage * itemsPerPage, itemsPerPage),
         getRacks(token),
         getShelves(token),
@@ -178,10 +178,6 @@ const BookManagement: React.FC = () => {
         setShelves(shelvesResponse.shelves || []);
       } else {
         setShelves([]);
-      }
-
-      if (usersResponse && typeof usersResponse === 'object') {
-      } else {
       }
     } catch (err) {
       console.error('Failed to fetch data:', err);
@@ -343,7 +339,7 @@ const BookManagement: React.FC = () => {
 
         try {
           const response = await fetch(
-            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/getinfo/latest-isbn`,
+            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/scan-info/latest-isbn`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,

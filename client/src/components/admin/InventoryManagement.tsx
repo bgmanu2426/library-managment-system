@@ -14,8 +14,6 @@ import {
   User,
   ArrowLeft,
   ArrowRight,
-  Building,
-  Grid3X3,
 } from 'lucide-react';
 import {
   getBooks,
@@ -26,18 +24,12 @@ import {
   searchBooks,
   getRacks,
   getShelves,
-  createRack,
-  createShelf,
 } from '../../utils/api';
 import {
   Book as BookType,
   User as UserType,
   IssueBookPayload,
   ReturnBookPayload,
-  Rack,
-  Shelf,
-  RackCreatePayload,
-  ShelfCreatePayload,
   RecentActivity,
 } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -84,24 +76,6 @@ const InventoryManagement: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<BookType[]>([]);
 
-  // Rack and Shelf Management States
-  const [racks, setRacks] = useState<Rack[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [shelves, setShelves] = useState<Shelf[]>([]);
-  const [showAddRackModal, setShowAddRackModal] = useState(false);
-  const [showAddShelfModal, setShowAddShelfModal] = useState(false);
-  const [newRack, setNewRack] = useState<RackCreatePayload>({
-    name: '',
-    location: '',
-    description: '',
-  });
-  const [newShelf, setNewShelf] = useState<ShelfCreatePayload>({
-    name: '',
-    rack_id: 0,
-    capacity: 50,
-    description: '',
-  });
-
   const fetchData = useCallback(async () => {
     if (!user) {
       setError('Authentication required. Please log in to access inventory management.');
@@ -118,17 +92,16 @@ const InventoryManagement: React.FC = () => {
         throw new Error('Authentication token not found');
       }
 
-      const [booksResponse, usersResponse, activityResponse, racksResponse, shelvesResponse] =
-        await Promise.all([
-          getBooks(token, currentPage * itemsPerPage, itemsPerPage),
-          getUsers(token, 0, 1000),
-          getRecentActivity(token),
-          getRacks(token),
-          getShelves(token),
-        ]);
+      const [booksResponse, usersResponse, activityResponse] = await Promise.all([
+        getBooks(token, currentPage * itemsPerPage, itemsPerPage),
+        getUsers(token, 0, 1000),
+        getRecentActivity(token),
+        getRacks(token),
+        getShelves(token),
+      ]);
 
       // Handle proper response format from updated API for books
-      if (booksResponse && typeof booksResponse === 'object') {
+      if (booksResponse && typeof booksResponse === 'object' && !Array.isArray(usersResponse)) {
         setBooks(booksResponse.books || []);
         setTotalBooks(booksResponse.total || 0);
       } else if (Array.isArray(booksResponse)) {
@@ -140,7 +113,7 @@ const InventoryManagement: React.FC = () => {
       }
 
       // Handle proper response format for users
-      if (usersResponse && typeof usersResponse === 'object') {
+      if (usersResponse && typeof usersResponse === 'object' && !Array.isArray(usersResponse)) {
         setUsers(usersResponse.users || []);
         setTotalUsers(usersResponse.total || 0);
       } else if (Array.isArray(usersResponse)) {
@@ -158,24 +131,6 @@ const InventoryManagement: React.FC = () => {
         setRecentActivity(activityResponse);
       } else {
         setRecentActivity([]);
-      }
-
-      // Handle proper response format for racks
-      if (racksResponse && typeof racksResponse === 'object') {
-        setRacks(racksResponse.racks || []);
-      } else if (Array.isArray(racksResponse)) {
-        setRacks(racksResponse);
-      } else {
-        setRacks([]);
-      }
-
-      // Handle proper response format for shelves
-      if (shelvesResponse && typeof shelvesResponse === 'object') {
-        setShelves(shelvesResponse.shelves || []);
-      } else if (Array.isArray(shelvesResponse)) {
-        setShelves(shelvesResponse);
-      } else {
-        setShelves([]);
       }
     } catch (err) {
       console.error('Failed to fetch inventory data:', err);
@@ -294,46 +249,6 @@ const InventoryManagement: React.FC = () => {
     return errors;
   };
 
-  const validateRackForm = (): { [key: string]: string } => {
-    const errors: { [key: string]: string } = {};
-
-    if (!newRack.name?.trim()) {
-      errors.name = 'Rack name is required';
-    } else if (newRack.name.trim().length < 2) {
-      errors.name = 'Rack name must be at least 2 characters long';
-    }
-
-    if (!newRack.location?.trim()) {
-      errors.location = 'Location is required';
-    } else if (newRack.location.trim().length < 2) {
-      errors.location = 'Location must be at least 2 characters long';
-    }
-
-    return errors;
-  };
-
-  const validateShelfForm = (): { [key: string]: string } => {
-    const errors: { [key: string]: string } = {};
-
-    if (!newShelf.name?.trim()) {
-      errors.name = 'Shelf name is required';
-    } else if (newShelf.name.trim().length < 2) {
-      errors.name = 'Shelf name must be at least 2 characters long';
-    }
-
-    if (!newShelf.rack_id || newShelf.rack_id === 0) {
-      errors.rack_id = 'Rack selection is required';
-    }
-
-    if (!newShelf.capacity || newShelf.capacity < 1) {
-      errors.capacity = 'Capacity must be at least 1';
-    } else if (newShelf.capacity > 1000) {
-      errors.capacity = 'Capacity cannot exceed 1000';
-    }
-
-    return errors;
-  };
-
   const handleIssueBook = async () => {
     if (!user) {
       showNotification('error', 'Authentication required');
@@ -440,109 +355,6 @@ const InventoryManagement: React.FC = () => {
         }
       } else {
         showNotification('error', 'Failed to return book. Please try again.');
-      }
-    } finally {
-      setIsOperationLoading(false);
-    }
-  };
-
-  const handleAddRack = async () => {
-    if (!user) {
-      showNotification('error', 'Authentication required');
-      return;
-    }
-
-    const errors = validateRackForm();
-    setFormErrors(errors);
-
-    if (Object.keys(errors).length > 0) return;
-
-    setIsOperationLoading(true);
-    try {
-      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-
-      await createRack(token, {
-        name: newRack.name.trim(),
-        location: newRack.location?.trim(),
-        description: newRack.description.trim(),
-      });
-
-      showNotification('success', 'Rack created successfully');
-      setNewRack({ name: '', location: '', description: '' });
-      setFormErrors({});
-      setShowAddRackModal(false);
-      handleRefresh();
-    } catch (err) {
-      console.error('Failed to create rack:', err);
-      if (err instanceof Error) {
-        if (err.message.includes('already exists')) {
-          showNotification('error', 'A rack with this name already exists.');
-        } else if (err.message.includes('401')) {
-          showNotification('error', 'Authentication expired. Please log in again.');
-        } else if (err.message.includes('403')) {
-          showNotification('error', 'Access denied. You do not have permission to create racks.');
-        } else if (err.message.includes('Network')) {
-          showNotification('error', 'Network error. Please check your connection and try again.');
-        } else {
-          showNotification('error', err.message);
-        }
-      } else {
-        showNotification('error', 'Failed to create rack. Please try again.');
-      }
-    } finally {
-      setIsOperationLoading(false);
-    }
-  };
-
-  const handleAddShelf = async () => {
-    if (!user) {
-      showNotification('error', 'Authentication required');
-      return;
-    }
-
-    const errors = validateShelfForm();
-    setFormErrors(errors);
-
-    if (Object.keys(errors).length > 0) return;
-
-    setIsOperationLoading(true);
-    try {
-      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
-
-      await createShelf(token, {
-        name: newShelf.name.trim(),
-        rack_id: newShelf.rack_id,
-        capacity: newShelf.capacity,
-        description: newShelf.description?.trim(),
-      });
-
-      showNotification('success', 'Shelf created successfully');
-      setNewShelf({ name: '', rack_id: 0, capacity: 50, description: '' });
-      setFormErrors({});
-      setShowAddShelfModal(false);
-      handleRefresh();
-    } catch (err) {
-      console.error('Failed to create shelf:', err);
-      if (err instanceof Error) {
-        if (err.message.includes('already exists')) {
-          showNotification('error', 'A shelf with this name already exists in the selected rack.');
-        } else if (err.message.includes('401')) {
-          showNotification('error', 'Authentication expired. Please log in again.');
-        } else if (err.message.includes('403')) {
-          showNotification('error', 'Access denied. You do not have permission to create shelves.');
-        } else if (err.message.includes('Network')) {
-          showNotification('error', 'Network error. Please check your connection and try again.');
-        } else {
-          showNotification('error', err.message);
-        }
-      } else {
-        showNotification('error', 'Failed to create shelf. Please try again.');
       }
     } finally {
       setIsOperationLoading(false);
@@ -665,28 +477,6 @@ const InventoryManagement: React.FC = () => {
         >
           <IterationCw className="w-5 h-5" />
           <span>Return Book</span>
-        </button>
-        <button
-          onClick={() => {
-            setShowAddRackModal(true);
-            setFormErrors({});
-            setNewRack({ name: '', location: '', description: '' });
-          }}
-          className="flex items-center justify-center space-x-2 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
-        >
-          <Building className="w-5 h-5" />
-          <span>Add Rack</span>
-        </button>
-        <button
-          onClick={() => {
-            setShowAddShelfModal(true);
-            setFormErrors({});
-            setNewShelf({ name: '', rack_id: 0, capacity: 50, description: '' });
-          }}
-          className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Grid3X3 className="w-5 h-5" />
-          <span>Add Shelf</span>
         </button>
       </div>
 
@@ -1140,186 +930,6 @@ const InventoryManagement: React.FC = () => {
               >
                 {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
                 <span>Return Book</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Rack Modal */}
-      {showAddRackModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 md:p-8 max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-900">Add New Rack</h3>
-              <button
-                onClick={() => {
-                  setShowAddRackModal(false);
-                  setFormErrors({});
-                  setNewRack({ name: '', location: '', description: '' });
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Rack Name</label>
-                <input
-                  type="text"
-                  value={newRack.name}
-                  onChange={e => setNewRack({ ...newRack, name: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.name ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
-                  placeholder="Enter rack name"
-                />
-                {formErrors.name && <p className="mt-1 text-red-500 text-xs">{formErrors.name}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                <input
-                  type="text"
-                  value={newRack.location}
-                  onChange={e => setNewRack({ ...newRack, location: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.location ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
-                  placeholder="Enter rack location"
-                />
-                {formErrors.location && (
-                  <p className="mt-1 text-red-500 text-xs">{formErrors.location}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description (Optional)
-                </label>
-                <textarea
-                  value={newRack.description}
-                  onChange={e => setNewRack({ ...newRack, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                  placeholder="Enter rack description"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowAddRackModal(false);
-                  setFormErrors({});
-                  setNewRack({ name: '', location: '', description: '' });
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddRack}
-                disabled={isOperationLoading}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2"
-              >
-                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
-                <span>Create Rack</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Shelf Modal */}
-      {showAddShelfModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 md:p-8 max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-900">Add New Shelf</h3>
-              <button
-                onClick={() => {
-                  setShowAddShelfModal(false);
-                  setFormErrors({});
-                  setNewShelf({ name: '', rack_id: 0, capacity: 50, description: '' });
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Shelf Name</label>
-                <input
-                  type="text"
-                  value={newShelf.name}
-                  onChange={e => setNewShelf({ ...newShelf, name: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.name ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent`}
-                  placeholder="Enter shelf name"
-                />
-                {formErrors.name && <p className="mt-1 text-red-500 text-xs">{formErrors.name}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Rack</label>
-                <select
-                  value={newShelf.rack_id}
-                  onChange={e => setNewShelf({ ...newShelf, rack_id: parseInt(e.target.value) })}
-                  className={`w-full px-4 py-3 border ${formErrors.rack_id ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent`}
-                >
-                  <option value={0}>Select a rack</option>
-                  {racks.map(rack => (
-                    <option key={rack.id} value={rack.id}>
-                      {rack.name} - {rack.location}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.rack_id && (
-                  <p className="mt-1 text-red-500 text-xs">{formErrors.rack_id}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Capacity</label>
-                <input
-                  type="number"
-                  value={newShelf.capacity}
-                  onChange={e =>
-                    setNewShelf({ ...newShelf, capacity: parseInt(e.target.value) || 0 })
-                  }
-                  min="1"
-                  max="1000"
-                  className={`w-full px-4 py-3 border ${formErrors.capacity ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent`}
-                  placeholder="Enter shelf capacity"
-                />
-                {formErrors.capacity && (
-                  <p className="mt-1 text-red-500 text-xs">{formErrors.capacity}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description (Optional)
-                </label>
-                <textarea
-                  value={newShelf.description}
-                  onChange={e => setNewShelf({ ...newShelf, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-                  placeholder="Enter shelf description"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowAddShelfModal(false);
-                  setFormErrors({});
-                  setNewShelf({ name: '', rack_id: 0, capacity: 50, description: '' });
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddShelf}
-                disabled={isOperationLoading}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center space-x-2"
-              >
-                {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
-                <span>Create Shelf</span>
               </button>
             </div>
           </div>

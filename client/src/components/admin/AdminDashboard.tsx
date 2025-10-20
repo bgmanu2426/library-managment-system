@@ -137,20 +137,6 @@ const AdminDashboard: React.FC = () => {
               current_books: 28,
               utilization_percentage: 80,
             },
-            {
-              shelf_id: 4,
-              shelf_name: 'Calculus',
-              capacity: 30,
-              current_books: 18,
-              utilization_percentage: 60,
-            },
-            {
-              shelf_id: 5,
-              shelf_name: 'Linear Algebra',
-              capacity: 25,
-              current_books: 15,
-              utilization_percentage: 60,
-            },
           ];
 
           // Set fallback data to prevent UI crashes but show sample utilization

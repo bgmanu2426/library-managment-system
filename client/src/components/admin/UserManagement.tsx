@@ -255,7 +255,7 @@ const UserManagement: React.FC = () => {
   const handleFetchRFID = async () => {
     setIsFetchingRFID(true);
     setFormErrors({ ...formErrors, user_uid: '' });
-    
+
     try {
       const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
       if (!token) {
@@ -273,7 +273,7 @@ const UserManagement: React.FC = () => {
 
         try {
           const response = await fetch(
-            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/getinfo/latest`,
+            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/scan-info/latest`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,

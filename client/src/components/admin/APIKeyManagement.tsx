@@ -39,11 +39,14 @@ const APIKeyManagement: React.FC = () => {
     setError(null);
     try {
       const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/list`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/list`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to fetch API keys');
@@ -68,14 +71,17 @@ const APIKeyManagement: React.FC = () => {
     setError(null);
     try {
       const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/generate`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: newKeyName }),
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/generate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: newKeyName }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to generate API key');
@@ -102,12 +108,15 @@ const APIKeyManagement: React.FC = () => {
     setError(null);
     try {
       const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/${id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to delete API key');
@@ -126,12 +135,15 @@ const APIKeyManagement: React.FC = () => {
     setError(null);
     try {
       const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/${id}/toggle`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/api-keys/${id}/toggle`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to toggle API key status');
@@ -208,7 +220,8 @@ const APIKeyManagement: React.FC = () => {
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
                 <p className="text-yellow-800 text-sm font-medium">
-                  ⚠️ Important: Copy this API key now. For security reasons, you won't be able to see it again.
+                  ⚠️ Important: Copy this API key now. For security reasons, you won't be able to
+                  see it again.
                 </p>
               </div>
 
@@ -243,9 +256,17 @@ const APIKeyManagement: React.FC = () => {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                 <h3 className="font-semibold text-blue-900 mb-2">How to use this API key:</h3>
                 <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
-                  <li>Include the API key in the <code className="bg-blue-100 px-1 rounded">x-api-key</code> header</li>
+                  <li>
+                    Include the API key in the{' '}
+                    <code className="bg-blue-100 px-1 rounded">x-api-key</code> header
+                  </li>
                   <li>Make requests to any protected endpoint</li>
-                  <li>Example: <code className="bg-blue-100 px-1 rounded">x-api-key: {createdKey.prefix}...</code></li>
+                  <li>
+                    Example:{' '}
+                    <code className="bg-blue-100 px-1 rounded">
+                      x-api-key: {createdKey.prefix}...
+                    </code>
+                  </li>
                 </ol>
               </div>
 
@@ -269,13 +290,11 @@ const APIKeyManagement: React.FC = () => {
             <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-4">Generate New API Key</h2>
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Key Name
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Key Name</label>
                 <input
                   type="text"
                   value={newKeyName}
-                  onChange={(e) => setNewKeyName(e.target.value)}
+                  onChange={e => setNewKeyName(e.target.value)}
                   placeholder="e.g., Mobile App Key, Production Server"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -356,7 +375,7 @@ const APIKeyManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {apiKeys.map((key) => (
+                  {apiKeys.map(key => (
                     <tr key={key.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{key.name}</div>
@@ -413,14 +432,14 @@ const APIKeyManagement: React.FC = () => {
               <h3 className="font-semibold mb-2">Making Requests with API Keys</h3>
               <p className="text-sm mb-2">Include your API key in the request header:</p>
               <pre className="bg-gray-50 border border-gray-200 rounded p-3 text-sm overflow-x-auto">
-{`curl -H "x-api-key: your_api_key_here" \\
+                {`curl -H "x-api-key: your_api_key_here" \\
      ${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/admin/users`}
               </pre>
             </div>
             <div>
               <h3 className="font-semibold mb-2">Python Example</h3>
               <pre className="bg-gray-50 border border-gray-200 rounded p-3 text-sm overflow-x-auto">
-{`import requests
+                {`import requests
 
 headers = {"x-api-key": "your_api_key_here"}
 response = requests.get(

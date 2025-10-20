@@ -215,5 +215,5 @@ if __name__ == "__main__":
         app,
         host=host,
         port=port,
-        reload=os.getenv("ENVIRONMENT") == "development"
+        reload=os.getenv("ENVIRONMENT") == "development",
     )

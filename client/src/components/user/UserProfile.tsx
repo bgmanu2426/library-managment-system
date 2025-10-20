@@ -61,8 +61,10 @@ const UserProfile: React.FC = () => {
 
         // Fetch user profile from API
         const profileResponse = await getUserProfile(token);
-        // Handle direct user object response - no nested structure
-        setEditedUser(profileResponse);
+        setEditedUser({
+          ...profileResponse,
+          role: profileResponse.role as 'user' | 'admin',
+        });
 
         // Fetch user's book history statistics
         const historyResponse = await getBookHistory(token, 0, 1000, 'all');

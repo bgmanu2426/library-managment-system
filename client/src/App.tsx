@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { TwentyFirstToolbar } from '@21st-extension/toolbar-react';
-import { ReactPlugin } from '@21st-extension/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Layout from './components/Layout';
@@ -84,13 +82,6 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <AppContent />
-      {/* 21st.dev Toolbar: renders only in development by default */}
-      <TwentyFirstToolbar
-        enabled={typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV}
-        config={{
-          plugins: [ReactPlugin],
-        }}
-      />
     </AuthProvider>
   );
 };

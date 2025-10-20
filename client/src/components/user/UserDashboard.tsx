@@ -22,7 +22,7 @@ import {
   getBooksbyCategory,
   getUserDashboardStats,
 } from '../../utils/api';
-import { Book, Rack, Shelf, User as UserType, BookResponse } from '../../types';
+import { Rack, Shelf, User as UserType, BookResponse } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 
 const UserDashboard: React.FC = () => {
@@ -105,7 +105,15 @@ const UserDashboard: React.FC = () => {
       setRacks(racksResponse.racks || []);
       setShelves(shelvesResponse.shelves || []);
       setCurrentBooks(currentBooksResponse.books || []);
-      setUserProfile(profileResponse || user);
+      // Cast role to proper type
+      setUserProfile(
+        profileResponse
+          ? {
+              ...profileResponse,
+              role: profileResponse.role as 'user' | 'admin',
+            }
+          : user
+      );
       setCategorizedBooks(categorizedBooksResponse.categories || []);
       setDashboardStats(dashboardStatsResponse || null);
       setOverdueBooks(dashboardStatsResponse?.overdue_books || []);
@@ -182,14 +190,8 @@ const UserDashboard: React.FC = () => {
     setRefreshKey(prev => prev + 1);
   };
 
-  const displayBooks = searchTerm ? searchResults : books;
-
   const getShelfForBook = (shelfId: number) => {
     return shelves.find(shelf => shelf.id === shelfId);
-  };
-
-  const getRackForBook = (rackId: number) => {
-    return racks.find(rack => rack.id === rackId);
   };
 
   const getBooksForRack = (rackId: number) => {

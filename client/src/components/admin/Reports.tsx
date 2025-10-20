@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   BarChart3,
   Download,
@@ -44,6 +44,7 @@ const Reports: React.FC = () => {
   const [customDateRange, setCustomDateRange] = useState('last30days');
   const [isLoading, setIsLoading] = useState(true);
   const [isReportGenerating, setIsReportGenerating] = useState(false);
+  const [isOperationLoading, setIsOperationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
@@ -56,6 +57,7 @@ const Reports: React.FC = () => {
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries] = useState(3);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isRetrying, setIsRetrying] = useState(false);
   const [lastFailedOperation, setLastFailedOperation] = useState<string | null>(null);
 
@@ -139,9 +141,9 @@ const Reports: React.FC = () => {
         }
 
         // Set inventory status with fallback data
-        if (inventoryStatus?.inventory_status) {
-          console.log('📦 Inventory Status - Using API data:', inventoryStatus.inventory_status);
-          setInventoryStatusData(inventoryStatus.inventory_status);
+        if (inventoryStatus) {
+          console.log('📦 Inventory Status - Using API data:', inventoryStatus);
+          setInventoryStatusData(inventoryStatus);
         } else {
           console.log('📦 Inventory Status - Using fallback data');
           // Provide meaningful fallback data for inventory status
@@ -204,6 +206,7 @@ const Reports: React.FC = () => {
     };
 
     fetchReportData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.user, refreshKey, customDateRange, userIdFilter, genreFilter]);
 
   useEffect(() => {
@@ -222,27 +225,31 @@ const Reports: React.FC = () => {
         clearInterval(refreshInterval);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh]);
 
-  const handleReportError = (reportName: string) => (error: any) => {
-    console.error(`Failed to fetch ${reportName}:`, error);
+  const handleReportError = useCallback(
+    (reportName: string) => (error: unknown) => {
+      console.error(`Failed to fetch ${reportName}:`, error);
 
-    if (error instanceof Error) {
-      if (error.message.includes('400') || error.message.includes('Bad Request')) {
-        throw new Error(
-          `${reportName} failed: Invalid parameters. Please check your date range and filter settings.`
-        );
-      } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
-        throw new Error(
-          `${reportName} temporarily unavailable. The report service may be under maintenance.`
-        );
+      if (error instanceof Error) {
+        if (error.message.includes('400') || error.message.includes('Bad Request')) {
+          throw new Error(
+            `${reportName} failed: Invalid parameters. Please check your date range and filter settings.`
+          );
+        } else if (error.message.includes('405') || error.message.includes('Method Not Allowed')) {
+          throw new Error(
+            `${reportName} temporarily unavailable. The report service may be under maintenance.`
+          );
+        }
       }
-    }
 
-    throw error;
-  };
+      throw error;
+    },
+    []
+  );
 
-  const handleFetchError = (err: any) => {
+  const handleFetchError = useCallback((err: unknown) => {
     if (err instanceof Error) {
       if (err.message.includes('401') || err.message.includes('Authentication')) {
         setError('Your session has expired. Please log in again to access reports.');
@@ -304,9 +311,10 @@ const Reports: React.FC = () => {
       setError('An unexpected error occurred while loading reports.');
       showNotification('error', 'Unexpected error', 'Please refresh the page and try again.');
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const validateFormInputs = (): boolean => {
+  const validateFormInputs = useCallback((): boolean => {
     const errors: { [key: string]: string } = {};
 
     // Validate custom date range
@@ -357,9 +365,9 @@ const Reports: React.FC = () => {
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  };
+  }, [customDateRange, dateRange, reportType, userIdFilter, genreFilter]);
 
-  const getDateRangeParams = () => {
+  const getDateRangeParams = useCallback(() => {
     const now = new Date();
     let startDate: string;
     const endDate = now.toISOString();
@@ -390,18 +398,17 @@ const Reports: React.FC = () => {
     }
 
     return { start_date: startDate, end_date: endDate };
-  };
+  }, [customDateRange, dateRange]);
 
-  const showNotification = (
-    type: 'success' | 'error' | 'warning' | 'info',
-    message: string,
-    details?: string
-  ) => {
-    setNotification({ type, message, details });
-    setTimeout(() => setNotification(null), 8000); // Increased timeout for detailed messages
-  };
+  const showNotification = useCallback(
+    (type: 'success' | 'error' | 'warning' | 'info', message: string, details?: string) => {
+      setNotification({ type, message, details });
+      setTimeout(() => setNotification(null), 8000); // Increased timeout for detailed messages
+    },
+    []
+  );
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     if (isLoading || isOperationLoading || isRetrying) {
       showNotification(
         'warning',
@@ -411,58 +418,7 @@ const Reports: React.FC = () => {
       return;
     }
     setRefreshKey(prev => prev + 1);
-  };
-
-  const handleRetryWithBackoff = async (operation: () => Promise<void>, operationName: string) => {
-    if (retryCount >= maxRetries) {
-      showNotification(
-        'error',
-        `${operationName} failed after ${maxRetries} attempts`,
-        'Please check your connection and try again later.'
-      );
-      setIsRetrying(false);
-      setLastFailedOperation(operationName);
-      return;
-    }
-
-    setIsRetrying(true);
-    setLastFailedOperation(operationName);
-    const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
-
-    showNotification(
-      'info',
-      `Retrying ${operationName}...`,
-      `Attempt ${retryCount + 1} of ${maxRetries}. Waiting ${delay / 1000} seconds.`
-    );
-
-    setTimeout(async () => {
-      try {
-        setRetryCount(prev => prev + 1);
-        await operation();
-        setRetryCount(0); // Reset on success
-        setLastFailedOperation(null);
-        showNotification(
-          'success',
-          `${operationName} completed successfully`,
-          'The operation was completed after retry.'
-        );
-        setIsRetrying(false);
-      } catch (error) {
-        console.error(`Retry ${retryCount + 1} failed for ${operationName}:`, error);
-        if (retryCount + 1 < maxRetries) {
-          await handleRetryWithBackoff(operation, operationName);
-        } else {
-          showNotification(
-            'error',
-            `${operationName} failed after ${maxRetries} attempts`,
-            'Please try again later or contact support.'
-          );
-          setIsRetrying(false);
-          setLastFailedOperation(operationName);
-        }
-      }
-    }, delay);
-  };
+  }, [isLoading, isOperationLoading, isRetrying, showNotification]);
 
   // CSV Export Functions
   const exportUserActivityToCSV = () => {
@@ -772,50 +728,56 @@ const Reports: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    // Check if we have any data to export for all-reports
-    if (reportType === 'all-reports') {
-      const hasUserData = userActivityData && userActivityData.length > 0;
-      const hasBookData = bookCirculationData && bookCirculationData.length > 0;
-      const hasOverdueData = overdueSummaryData !== null;
-      const hasInventoryData = inventoryStatusData !== null;
+    setIsOperationLoading(true);
+    try {
+      // Check if we have any data to export for all-reports
+      if (reportType === 'all-reports') {
+        const hasUserData = userActivityData && userActivityData.length > 0;
+        const hasBookData = bookCirculationData && bookCirculationData.length > 0;
+        const hasOverdueData = overdueSummaryData !== null;
+        const hasInventoryData = inventoryStatusData !== null;
 
-      if (!hasUserData && !hasBookData && !hasOverdueData && !hasInventoryData) {
-        showNotification(
-          'warning',
-          'No data to export',
-          'Please wait for reports to load before exporting.'
-        );
-        return;
+        if (!hasUserData && !hasBookData && !hasOverdueData && !hasInventoryData) {
+          showNotification(
+            'warning',
+            'No data to export',
+            'Please wait for reports to load before exporting.'
+          );
+          return;
+        }
       }
-    }
 
-    switch (reportType) {
-      case 'user-activity':
-        exportUserActivityToCSV();
-        break;
-      case 'book-circulation':
-        exportBookCirculationToCSV();
-        break;
-      case 'overdue-summary':
-        exportOverdueSummaryToCSV();
-        break;
-      case 'inventory-status':
-        exportInventoryStatusToCSV();
-        break;
-      case 'all-reports':
-        exportAllReportsToCSV();
-        break;
-      default:
-        showNotification(
-          'error',
-          'Export not supported',
-          'CSV export is not supported for this report type.'
-        );
+      switch (reportType) {
+        case 'user-activity':
+          exportUserActivityToCSV();
+          break;
+        case 'book-circulation':
+          exportBookCirculationToCSV();
+          break;
+        case 'overdue-summary':
+          exportOverdueSummaryToCSV();
+          break;
+        case 'inventory-status':
+          exportInventoryStatusToCSV();
+          break;
+        case 'all-reports':
+          exportAllReportsToCSV();
+          break;
+        default:
+          showNotification(
+            'error',
+            'Export not supported',
+            'CSV export is not supported for this report type.'
+          );
+      }
+    } finally {
+      setIsOperationLoading(false);
     }
   };
 
   const handleExportPDF = async () => {
     showNotification('info', 'PDF export starting', 'Generating PDF report...');
+    setIsOperationLoading(true);
     try {
       // Check if we have any data to export for all-reports
       if (reportType === 'all-reports') {
@@ -980,7 +942,8 @@ const Reports: React.FC = () => {
             inventoryStatusData.shelf_utilization &&
             inventoryStatusData.shelf_utilization.length > 0
           ) {
-            const finalY = (doc as any).lastAutoTable.finalY || yPosition + 50;
+            const docWithTable = doc as unknown as { lastAutoTable: { finalY: number } };
+            const finalY = docWithTable.lastAutoTable?.finalY || yPosition + 50;
 
             autoTable(doc, {
               startY: finalY + 10,
@@ -998,7 +961,7 @@ const Reports: React.FC = () => {
           }
           break;
 
-        case 'all-reports':
+        case 'all-reports': {
           let currentY = yPosition;
 
           // User Activity Section
@@ -1024,7 +987,8 @@ const Reports: React.FC = () => {
               styles: { fontSize: 7 },
             });
 
-            currentY = (doc as any).lastAutoTable.finalY + 15;
+            const docWithTable = doc as unknown as { lastAutoTable: { finalY: number } };
+            currentY = docWithTable.lastAutoTable?.finalY + 15;
           } else {
             doc.setFontSize(12);
             doc.text('User Activity Report: No data available', 14, currentY);
@@ -1062,7 +1026,8 @@ const Reports: React.FC = () => {
               styles: { fontSize: 7 },
             });
 
-            currentY = (doc as any).lastAutoTable.finalY + 15;
+            const docWithTable2 = doc as unknown as { lastAutoTable: { finalY: number } };
+            currentY = docWithTable2.lastAutoTable?.finalY + 15;
           } else {
             if (currentY > 220) {
               doc.addPage();
@@ -1103,7 +1068,8 @@ const Reports: React.FC = () => {
               styles: { fontSize: 9 },
             });
 
-            currentY = (doc as any).lastAutoTable.finalY + 15;
+            const docWithTable3 = doc as unknown as { lastAutoTable: { finalY: number } };
+            currentY = docWithTable3.lastAutoTable?.finalY + 15;
           } else {
             if (currentY > 220) {
               doc.addPage();
@@ -1149,6 +1115,7 @@ const Reports: React.FC = () => {
             doc.text('Inventory Status Report: No data available', 14, currentY);
           }
           break;
+        }
       }
 
       // Save the PDF
@@ -1163,6 +1130,8 @@ const Reports: React.FC = () => {
     } catch (error) {
       console.error('PDF export error:', error);
       showNotification('error', 'PDF export failed', 'Unable to generate PDF. Please try again.');
+    } finally {
+      setIsOperationLoading(false);
     }
   };
 
@@ -1863,7 +1832,16 @@ const Reports: React.FC = () => {
                 <BarChart3 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
                   value={reportType}
-                  onChange={e => setReportType(e.target.value as any)}
+                  onChange={e =>
+                    setReportType(
+                      e.target.value as
+                        | 'user-activity'
+                        | 'book-circulation'
+                        | 'overdue-summary'
+                        | 'inventory-status'
+                        | 'all-reports'
+                    )
+                  }
                   disabled={isLoading || isOperationLoading || isRetrying}
                   className="w-full pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none bg-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >

@@ -224,7 +224,7 @@ const apiRequest = async <T>(
           throw new Error(
             Array.isArray(errorMessage) ? errorMessage[0]?.msg || 'Validation error' : errorMessage
           );
-        } catch (parseError) {
+        } catch {
           throw new Error('Request validation failed');
         }
       }
@@ -259,7 +259,7 @@ const apiRequest = async <T>(
             errorData?.message ||
             `HTTP ${response.status}: ${response.statusText}`
         );
-      } catch (parseError) {
+      } catch {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     }
@@ -376,8 +376,12 @@ export const extractArrayFromResponse = <T>(response: unknown, arrayKey?: string
     return response;
   }
 
-  if (isValidObjectResponse(response) && arrayKey && Array.isArray((response as any)[arrayKey])) {
-    return (response as any)[arrayKey];
+  if (
+    isValidObjectResponse(response) &&
+    arrayKey &&
+    Array.isArray((response as Record<string, unknown>)[arrayKey])
+  ) {
+    return (response as Record<string, unknown>)[arrayKey] as T[];
   }
 
   return [];
@@ -991,9 +995,11 @@ export const returnBook = async (
   }
 };
 
-export const getRecentActivity = async (token: string): Promise<{ recent_activities: any[] }> => {
+export const getRecentActivity = async (
+  token: string
+): Promise<{ recent_activities: Transaction[] }> => {
   try {
-    const response = await apiRequest<{ recent_activities?: any[] } | any[]>(
+    const response = await apiRequest<{ recent_activities?: Transaction[] } | Transaction[]>(
       getApiUrl(API_ENDPOINTS.RECENT_ACTIVITY),
       createAuthenticatedRequest(token)
     );
@@ -1076,9 +1082,9 @@ export const getBookHistory = async (
   );
 };
 
-export const getCurrentBooks = async (token: string): Promise<{ books: any[] }> => {
+export const getCurrentBooks = async (token: string): Promise<{ books: Book[] }> => {
   try {
-    const response = await apiRequest<{ books?: any[]; current_books?: any[] }>(
+    const response = await apiRequest<{ books?: Book[]; current_books?: Book[] }>(
       getApiUrl(API_ENDPOINTS.USER_CURRENT_BOOKS),
       createAuthenticatedRequest(token)
     );
@@ -1155,9 +1161,16 @@ export const getUserShelves = async (
   }
 };
 
-export const getBooksbyCategory = async (token: string): Promise<{ categories: any[] }> => {
+interface BookCategory {
+  genre: string;
+  books: Book[];
+}
+
+export const getBooksbyCategory = async (
+  token: string
+): Promise<{ categories: BookCategory[] }> => {
   try {
-    const response = await apiRequest<{ categories?: any[] }>(
+    const response = await apiRequest<{ categories?: BookCategory[] }>(
       getApiUrl(API_ENDPOINTS.USER_BOOKS_BY_CATEGORY),
       createAuthenticatedRequest(token)
     );
@@ -1177,7 +1190,7 @@ export const getBooksbyCategory = async (token: string): Promise<{ categories: a
 };
 
 // Request deduplication cache for overdue management
-const overdueRequestCache = new Map<string, { promise: Promise<any>; timestamp: number }>();
+const overdueRequestCache = new Map<string, { promise: Promise<unknown>; timestamp: number }>();
 const CACHE_DURATION = 5000; // 5 seconds
 
 // Helper function to clear expired cache entries
@@ -1239,7 +1252,7 @@ const overdueApiRequest = async <T>(
       const cachedRequest = overdueRequestCache.get(cacheKey);
       if (cachedRequest) {
         console.log(`Using cached request for: ${cacheKey}`);
-        return await cachedRequest.promise;
+        return (await cachedRequest.promise) as T;
       }
     }
 
@@ -1249,7 +1262,7 @@ const overdueApiRequest = async <T>(
     // Cache the request if deduplication is enabled
     if (enableDeduplication) {
       overdueRequestCache.set(cacheKey, {
-        promise: requestPromise,
+        promise: requestPromise as Promise<unknown>,
         timestamp: Date.now(),
       });
     }
@@ -1362,7 +1375,7 @@ export const getFines = async (
 export const calculateFines = async (
   token: string,
   fineData: CalculateFinesPayload
-): Promise<{ message: string; fines_created: any[] }> => {
+): Promise<{ message: string; fines_created: FineResponse[] }> => {
   try {
     validateAuthToken(token);
 
@@ -1384,7 +1397,7 @@ export const calculateFines = async (
     return await overdueApiRequest(
       cacheKey,
       () =>
-        apiRequest<{ message: string; fines_created: any[] }>(
+        apiRequest<{ message: string; fines_created: FineResponse[] }>(
           getApiUrl(API_ENDPOINTS.CALCULATE_FINES),
           {
             ...createAuthenticatedRequest(token),
@@ -2057,47 +2070,26 @@ export const getInventoryStatusReport = async (token: string): Promise<Inventory
   return response.inventory_status;
 };
 
-// export const exportReportExcel = async (
-//   token: string,
-//   reportType: string,
-//   params?: Record<string, string>
-// ): Promise<Blob> => {
-//   let url = `${API_ENDPOINTS.EXPORT_EXCEL}?report_type=${reportType}`;
+export const exportReportPDF = async (
+  token: string,
+  reportType: string,
+  params?: Record<string, string>
+): Promise<Blob> => {
+  let url = `${API_ENDPOINTS.EXPORT_PDF}?report_type=${reportType}`;
 
-//   if (params) {
-//     const searchParams = new URLSearchParams(params);
-//     url += `&${searchParams.toString()}`;
-//   }
+  if (params) {
+    const searchParams = new URLSearchParams(params);
+    url += `&${searchParams.toString()}`;
+  }
 
-//   const response = await fetch(getApiUrl(url), createAuthenticatedRequest(token));
+  const response = await fetch(getApiUrl(url), createAuthenticatedRequest(token));
 
-//   if (!response.ok) {
-//     throw new Error('Export failed');
-//   }
+  if (!response.ok) {
+    throw new Error('Export failed');
+  }
 
-//   return response.blob();
-// };
-
-// export const exportReportPDF = async (
-//   token: string,
-//   reportType: string,
-//   params?: Record<string, string>
-// ): Promise<Blob> => {
-//   let url = `${API_ENDPOINTS.EXPORT_PDF}?report_type=${reportType}`;
-
-//   if (params) {
-//     const searchParams = new URLSearchParams(params);
-//     url += `&${searchParams.toString()}`;
-//   }
-
-//   const response = await fetch(getApiUrl(url), createAuthenticatedRequest(token));
-
-//   if (!response.ok) {
-//     throw new Error('Export failed');
-//   }
-
-//   return response.blob();
-// };
+  return response.blob();
+};
 
 // Client-side export functions to replace problematic backend endpoints
 export const exportReportExcel = async (
@@ -2143,16 +2135,6 @@ export const exportReportExcel = async (
     }
     throw error;
   }
-};
-
-export const exportReportPDF = async (
-  token: string,
-  reportType: string,
-  params?: Record<string, string>
-): Promise<void> => {
-  throw new Error(
-    'PDF export is temporarily unavailable. Please use the client-side PDF generation feature instead.'
-  );
 };
 
 // Dashboard Statistics
@@ -2216,8 +2198,8 @@ export const getUserDashboardStats = async (
   available_books_count: number;
   overdue_books_count: number;
   total_fine_amount: number;
-  recent_activity: any[];
-  overdue_books: any[];
+  recent_activity: Transaction[];
+  overdue_books: OverdueBookResponse[];
   user_info: {
     id: number;
     name: string;
@@ -2230,8 +2212,8 @@ export const getUserDashboardStats = async (
       available_books_count?: number;
       overdue_books_count?: number;
       total_fine_amount?: number;
-      recent_activity?: any[];
-      overdue_books?: any[];
+      recent_activity?: Transaction[];
+      overdue_books?: OverdueBookResponse[];
       user_info?: {
         id: number;
         name: string;

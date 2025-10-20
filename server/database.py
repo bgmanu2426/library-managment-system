@@ -2,22 +2,15 @@ from sqlmodel import SQLModel, create_engine, Session
 from contextlib import contextmanager
 from typing import Generator
 import os
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 
-# Database URL configuration (read from environment)
+# Database URL configuration (read from environment, or from local)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./library.db")
 
 # Create SQLite engine
 engine = create_engine(
     DATABASE_URL, 
-    connect_args={"check_same_thread": False},
     echo=False
 )
-
-SessionLocal = sessionmaker(bind=engine)
-
-Base = declarative_base()
 
 # Create database and tables
 def create_db_and_tables():

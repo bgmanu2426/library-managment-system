@@ -30,7 +30,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await verifyToken(token);
 
       if (response.valid && response.user) {
-        setUser(response.user);
+        // Create a User object with the available data
+        // Missing fields will be populated when needed
+        setUser({
+          id: response.user.id,
+          name: response.user.name,
+          email: response.user.email,
+          role: response.user.role as 'user' | 'admin',
+          usn: '', // Will be populated from profile
+          mobile: '', // Will be populated from profile
+          address: '', // Will be populated from profile
+          created_at: new Date().toISOString(), // Placeholder
+        });
       } else {
         // Token is invalid or expired
         console.warn('Token validation failed: Token is no longer valid');
@@ -52,22 +63,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     checkToken();
-
-    // Set up token refresh interval - optional
-    // const refreshInterval = setInterval(() => {
-    //   const token = getToken();
-    //   if (token) {
-    //     checkToken();
-    //   }
-    // }, 15 * 60 * 1000); // Refresh every 15 minutes
-
-    // return () => clearInterval(refreshInterval);
   }, [checkToken]);
 
   const login = async (
     email: string,
     password: string,
-    userType: 'admin' | 'user' = 'user'
+    _userType: 'admin' | 'user' = 'user'
   ): Promise<boolean> => {
     setIsLoading(true);
     setLoginInProgress(true);
