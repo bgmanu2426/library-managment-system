@@ -57,6 +57,7 @@ const UserManagement: React.FC = () => {
     mobile: '',
     address: '',
     role: 'user',
+    user_uid: '',
     password: '',
   });
 
@@ -64,6 +65,7 @@ const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOperationLoading, setIsOperationLoading] = useState(false);
+  const [isFetchingRFID, setIsFetchingRFID] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error';
@@ -237,6 +239,10 @@ const UserManagement: React.FC = () => {
       errors.address = 'Address must be at least 10 characters long';
     }
 
+    if ('user_uid' in userData && !userData.user_uid?.trim()) {
+      errors.user_uid = 'RFID UID is required';
+    }
+
     if ('password' in userData && !userData.password && !selectedUser) {
       errors.password = 'Password is required for new users';
     } else if ('password' in userData && userData.password && userData.password.length < 6) {
@@ -244,6 +250,68 @@ const UserManagement: React.FC = () => {
     }
 
     return errors;
+  };
+
+  const handleFetchRFID = async () => {
+    setIsFetchingRFID(true);
+    setFormErrors({ ...formErrors, user_uid: '' });
+    
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      showNotification('success', 'Waiting for RFID scan... Please scan your card now.');
+
+      // Poll for RFID scan (try for 30 seconds)
+      const maxAttempts = 30;
+      let attempts = 0;
+
+      const pollInterval = setInterval(async () => {
+        attempts++;
+
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/getinfo/latest`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch RFID scan');
+          }
+
+          const data = await response.json();
+
+          if (data.available && data.uid) {
+            // RFID found!
+            clearInterval(pollInterval);
+            setIsFetchingRFID(false);
+            setNewUser({ ...newUser, user_uid: data.uid });
+            showNotification('success', `RFID UID captured: ${data.uid}`);
+            return;
+          }
+
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setIsFetchingRFID(false);
+            showNotification('error', 'No RFID scan detected. Please try again.');
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setIsFetchingRFID(false);
+          showNotification('error', 'Failed to fetch RFID scan');
+        }
+      }, 1000); // Poll every second
+    } catch {
+      setIsFetchingRFID(false);
+      showNotification('error', 'Failed to initiate RFID fetch');
+    }
   };
 
   const handleAddUser = async () => {
@@ -259,6 +327,7 @@ const UserManagement: React.FC = () => {
       mobile: newUser.mobile,
       address: newUser.address,
       role: newUser.role,
+      user_uid: newUser.user_uid,
       password: newUser.password,
     };
 
@@ -283,6 +352,7 @@ const UserManagement: React.FC = () => {
         mobile: '',
         address: '',
         role: 'user',
+        user_uid: '',
         password: '',
       });
       setShowAddModal(false);
@@ -516,6 +586,7 @@ const UserManagement: React.FC = () => {
                 mobile: '',
                 address: '',
                 role: 'user',
+                user_uid: '',
                 password: '',
               });
             }}
@@ -806,6 +877,45 @@ const UserManagement: React.FC = () => {
                 {formErrors.address && (
                   <p className="mt-1 text-red-500 text-xs">{formErrors.address}</p>
                 )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  RFID Card UID *
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newUser.user_uid || ''}
+                    onChange={e => setNewUser({ ...newUser, user_uid: e.target.value })}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter RFID UID or fetch from card"
+                    disabled={isFetchingRFID}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleFetchRFID}
+                    disabled={isFetchingRFID}
+                    className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  >
+                    {isFetchingRFID ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        <span>Waiting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Fetch ID</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {formErrors.user_uid && (
+                  <p className="mt-1 text-red-500 text-xs">{formErrors.user_uid}</p>
+                )}
+                <p className="mt-1 text-gray-500 text-xs">
+                  Click "Fetch ID" and scan your RFID card on the ESP32 reader
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>

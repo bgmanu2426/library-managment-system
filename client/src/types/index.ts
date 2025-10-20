@@ -6,6 +6,7 @@ export interface User {
   mobile: string;
   address: string;
   role: 'admin' | 'user';
+  user_uid?: string; // RFID card UID (optional)
   hashed_password?: string; // Optional for frontend responses
   created_at: string;
 }
@@ -140,6 +141,7 @@ export interface UserCreatePayload {
   mobile: string;
   address: string;
   role: 'admin' | 'user';
+  user_uid: string; // Mandatory RFID UID
   password: string;
 }
 
@@ -150,6 +152,7 @@ export interface UserUpdatePayload {
   mobile?: string;
   address?: string;
   role?: 'admin' | 'user';
+  user_uid?: string; // Display only, not editable
 }
 
 export interface UserProfileUpdatePayload {

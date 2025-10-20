@@ -67,6 +67,7 @@ const BookManagement: React.FC = () => {
   const [searchResults, setSearchResults] = useState<Book[]>([]);
   const [fineStatusCache, setFineStatusCache] = useState<{ [bookId: number]: boolean }>({});
   const [isCheckingFines, setIsCheckingFines] = useState(false);
+  const [isFetchingISBN, setIsFetchingISBN] = useState(false);
 
   const getRackName = (rackId: number) => {
     return racks.find(rack => rack.id === rackId)?.name || 'Unknown';
@@ -314,6 +315,73 @@ const BookManagement: React.FC = () => {
     }
 
     return errors;
+  };
+
+  const handleFetchISBN = async () => {
+    if (!user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    setIsFetchingISBN(true);
+    const maxAttempts = 30; // 30 attempts × 1 second = 30 seconds
+    let attempts = 0;
+
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      showNotification(
+        'success',
+        'Waiting for ISBN scan. Please scan a book barcode on the scanner...'
+      );
+
+      const pollInterval = setInterval(async () => {
+        attempts++;
+
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/api/getinfo/latest-isbn`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch ISBN scan');
+          }
+
+          const data = await response.json();
+
+          if (data.available && data.isbn) {
+            // ISBN found!
+            clearInterval(pollInterval);
+            setIsFetchingISBN(false);
+            setNewBook({ ...newBook, isbn: data.isbn });
+            showNotification('success', `ISBN captured: ${data.isbn}`);
+            return;
+          }
+
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setIsFetchingISBN(false);
+            showNotification('error', 'No ISBN scan detected. Please try again.');
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setIsFetchingISBN(false);
+          showNotification('error', 'Failed to fetch ISBN scan');
+        }
+      }, 1000); // Poll every second
+    } catch {
+      setIsFetchingISBN(false);
+      showNotification('error', 'Failed to initiate ISBN fetch');
+    }
   };
 
   const handleAddBook = async () => {
@@ -876,13 +944,34 @@ const BookManagement: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">ISBN</label>
-                <input
-                  type="text"
-                  value={newBook.isbn}
-                  onChange={e => setNewBook({ ...newBook, isbn: e.target.value })}
-                  className="w-full px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
-                  placeholder="Enter ISBN"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newBook.isbn}
+                    onChange={e => setNewBook({ ...newBook, isbn: e.target.value })}
+                    className="flex-1 px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm md:text-base"
+                    placeholder="Enter ISBN or scan barcode"
+                    disabled={isFetchingISBN}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleFetchISBN}
+                    disabled={isFetchingISBN}
+                    className="px-4 py-2.5 md:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap text-sm md:text-base"
+                  >
+                    {isFetchingISBN ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        <span>Scanning...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Scan</span>
+                      </>
+                    )}
+                  </button>
+                </div>
                 {formErrors.isbn && <p className="mt-1 text-red-500 text-xs">{formErrors.isbn}</p>}
               </div>
               <div>

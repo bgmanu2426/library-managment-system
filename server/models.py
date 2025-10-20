@@ -11,6 +11,7 @@ class User(SQLModel, table=True):
     mobile: str
     address: str
     role: str = Field(default="user")  # admin or user
+    user_uid: Optional[str] = Field(default=None, unique=True, index=True)  # RFID card UID
     hashed_password: str
     created_at: datetime = Field(default_factory=datetime.now)
 
