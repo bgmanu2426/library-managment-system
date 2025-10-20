@@ -12,7 +12,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: false,
-    allowedHosts: ['localhost', '.clackypaas.com', '.1024.sh'],
+    allowedHosts: ['localhost', '.azurewebsites.net'],
     hmr: {
       overlay: true,
     },
