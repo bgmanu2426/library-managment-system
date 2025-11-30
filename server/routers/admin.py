@@ -293,6 +293,7 @@ async def get_users(
                 "mobile": user.mobile,
                 "address": user.address,
                 "role": user.role,
+                "user_uid": user.user_uid,
                 "created_at": user.created_at
             }
             for user in users
@@ -368,21 +369,23 @@ async def delete_user(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Log user details before deletion for audit
         active_books = session.exec(
             select(Book).where(Book.issued_to == user_id)).all()
         if active_books:
             raise HTTPException(
-                status_code=400, detail="Cannot delete user with active book loans")
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete user with active book loans")
 
         session.delete(user)
         session.commit()
         return {"message": "User deleted successfully"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete user - {str(e)}"
+            detail=f"{str(e)}"
         )
 
 # Book management endpoints
@@ -578,11 +581,150 @@ async def delete_book(
         session.delete(book)
         session.commit()
         return {"message": "Book deleted successfully"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete book - {str(e)}"
+        )
+
+
+@router.get("/books/by-isbn/{isbn}")
+async def get_book_by_isbn(
+    isbn: str,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin)
+):
+    """Get a book by its ISBN number"""
+    try:
+        book = session.exec(select(Book).where(Book.isbn == isbn)).first()
+        if not book:
+            raise HTTPException(status_code=404, detail="Book not found with this ISBN")
+        
+        return {
+            "id": book.id,
+            "isbn": book.isbn,
+            "title": book.title,
+            "author": book.author,
+            "genre": book.genre,
+            "rack_id": book.rack_id,
+            "shelf_id": book.shelf_id,
+            "is_available": book.is_available,
+            "issued_to": book.issued_to,
+            "issued_date": book.issued_date,
+            "return_date": book.return_date,
+            "created_at": book.created_at
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch book by ISBN - {str(e)}"
+        )
+
+
+@router.get("/users/by-uid/{uid}")
+async def get_user_by_uid(
+    uid: str,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin)
+):
+    """Get a user by their RFID UID"""
+    try:
+        user = session.exec(select(User).where(User.user_uid == uid)).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found with this UID")
+        
+        return {
+            "id": user.id,
+            "name": user.name,
+            "usn": user.usn,
+            "email": user.email,
+            "mobile": user.mobile,
+            "address": user.address,
+            "role": user.role,
+            "user_uid": user.user_uid,
+            "created_at": user.created_at
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch user by UID - {str(e)}"
+        )
+
+
+@router.get("/users/{user_id}/issued-books")
+async def get_user_issued_books(
+    user_id: int,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin)
+):
+    """Get all currently issued books for a specific user"""
+    try:
+        # Check if user exists
+        user = session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Get all books currently issued to this user
+        issued_books = session.exec(
+            select(Book).where(
+                Book.issued_to == user_id,
+                Book.is_available == False
+            )
+        ).all()
+        
+        # Get pending fines for each book
+        book_list = []
+        for book in issued_books:
+            # Check for pending fine
+            transaction = session.exec(
+                select(Transaction).where(
+                    Transaction.book_id == book.id,
+                    Transaction.user_id == user_id,
+                    (Transaction.status == "current") | (Transaction.status == "overdue")
+                )
+            ).first()
+            
+            has_pending_fine = False
+            fine_amount = 0
+            
+            if transaction:
+                fine = session.exec(
+                    select(Fine).where(
+                        Fine.book_history_id == transaction.id,
+                        Fine.status == "pending"
+                    )
+                ).first()
+                if fine:
+                    has_pending_fine = True
+                    fine_amount = fine.fine_amount
+            
+            book_list.append({
+                "id": book.id,
+                "isbn": book.isbn,
+                "title": book.title,
+                "author": book.author,
+                "genre": book.genre,
+                "issued_date": book.issued_date,
+                "return_date": book.return_date,
+                "has_pending_fine": has_pending_fine,
+                "fine_amount": fine_amount
+            })
+        
+        return {"issued_books": book_list, "total": len(book_list)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch issued books - {str(e)}"
         )
 
 
@@ -764,6 +906,9 @@ async def delete_rack(
         session.delete(rack)
         session.commit()
         return {"message": "Rack deleted successfully"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(
@@ -864,6 +1009,9 @@ async def delete_shelf(
         session.delete(shelf)
         session.commit()
         return {"message": "Shelf deleted successfully"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(
@@ -955,11 +1103,14 @@ async def issue_book(
         session.commit()
 
         return {"message": "Book issued successfully"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred while processing the book issue. Please try again. - {str(e)}"
+            detail=f"{str(e)}"
         )
 
 
@@ -1011,8 +1162,8 @@ async def return_book(
 
         if not transaction:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No active transaction record found for book '{book.title}' and user '{user.name}'"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The book is overdue for user '{user.name}'. Pay the fine and return it"
             )
 
         # Check if there are unpaid fines for this book-user combination
@@ -1062,10 +1213,13 @@ async def return_book(
         }
 
         return response
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred while processing the book return. Please try again. - {str(e)}"
+            detail=f"{str(e)}"
         )
 
 

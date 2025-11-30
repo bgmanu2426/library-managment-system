@@ -1086,7 +1086,7 @@ const UserManagement: React.FC = () => {
                 Are you sure you want to delete <strong>{selectedUser.name}</strong>?
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                USN: {selectedUser.usn} • Email: {selectedUser.email}
+                USN: {selectedUser.usn} | Email: {selectedUser.email}
               </p>
             </div>
             <div className="flex justify-end space-x-3">

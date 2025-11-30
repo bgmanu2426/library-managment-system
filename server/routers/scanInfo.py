@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
+from models import User
+from auth import get_current_admin
 
 router = APIRouter()
 
@@ -42,7 +44,7 @@ class LatestISBNResponse(BaseModel):
 
 
 @router.post("/get-uid", response_model=RFIDScanResponse)
-async def receive_rfid_scan(scan_data: RFIDScanRequest):
+async def receive_rfid_scan(scan_data: RFIDScanRequest, current_admin: User = Depends(get_current_admin)):
     """
     Receive User UID from ESP32 microcontroller.
     This endpoint is called by the ESP32 when an RFID card is scanned on the device.
@@ -70,7 +72,7 @@ async def receive_rfid_scan(scan_data: RFIDScanRequest):
 
 
 @router.get("/latest", response_model=LatestRFIDResponse)
-async def get_latest_rfid_scan():
+async def get_latest_rfid_scan(current_admin: User = Depends(get_current_admin)):
     """
     Get the latest RFID scan for the frontend to fetch.
     The scan is only valid for 30 seconds to prevent stale data.
@@ -107,7 +109,7 @@ async def get_latest_rfid_scan():
 
 
 @router.delete("/clear")
-async def clear_latest_scan():
+async def clear_latest_scan(current_admin: User = Depends(get_current_admin)):
     """
     Clear the latest RFID scan.
     Useful if the user wants to cancel the current scan.
@@ -118,7 +120,7 @@ async def clear_latest_scan():
 
 
 @router.post("/scan-isbn", response_model=ISBNScanResponse)
-async def receive_isbn_scan(scan_data: ISBNScanRequest):
+async def receive_isbn_scan(scan_data: ISBNScanRequest, current_admin: User = Depends(get_current_admin)):
     """
     Receive ISBN barcode from barcode scanner or ESP32 microcontroller.
     This endpoint is called by the barcode scanner/ESP32 when a book barcode is scanned.
@@ -146,7 +148,7 @@ async def receive_isbn_scan(scan_data: ISBNScanRequest):
 
 
 @router.get("/latest-isbn", response_model=LatestISBNResponse)
-async def get_latest_isbn_scan():
+async def get_latest_isbn_scan(current_admin: User = Depends(get_current_admin)):
     """
     Get the latest ISBN barcode scan for the frontend to fetch.
     The scan is only valid for 30 seconds to prevent stale data.
@@ -183,7 +185,7 @@ async def get_latest_isbn_scan():
 
 
 @router.delete("/clear-isbn")
-async def clear_latest_isbn_scan():
+async def clear_latest_isbn_scan(current_admin: User = Depends(get_current_admin)):
     """
     Clear the latest ISBN barcode scan.
     Useful if the user wants to cancel the current scan.

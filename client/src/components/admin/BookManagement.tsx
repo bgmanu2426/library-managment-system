@@ -320,7 +320,7 @@ const BookManagement: React.FC = () => {
     }
 
     setIsFetchingISBN(true);
-    const maxAttempts = 30; // 30 attempts × 1 second = 30 seconds
+    const maxAttempts = 20; // 20 attempts × 1 second = 20 seconds
     let attempts = 0;
 
     try {

@@ -200,8 +200,14 @@ const apiRequest = async <T>(
 
     clearTimeout(timeoutId);
 
+    // Handle authentication errors
     if (!response.ok) {
-      // Handle authentication errors
+      if (response.status === 400) {
+        const errorData = await response.json();
+        const errorMessage = errorData?.detail || 'Bad Request';
+        throw new Error(errorMessage);
+      }
+
       if (response.status === 401) {
         // Clear stored tokens on authentication failure
         localStorage.removeItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
@@ -214,19 +220,15 @@ const apiRequest = async <T>(
       }
 
       if (response.status === 404) {
-        throw new Error('Resource not found');
+        const errorData = await response.json();
+        const errorMessage = errorData?.detail || 'Resource not found';
+        throw new Error(errorMessage);
       }
 
       if (response.status === 422) {
-        try {
-          const errorData = await response.json();
-          const errorMessage = errorData.detail || 'Validation error occurred';
-          throw new Error(
-            Array.isArray(errorMessage) ? errorMessage[0]?.msg || 'Validation error' : errorMessage
-          );
-        } catch {
-          throw new Error('Request validation failed');
-        }
+        const errorData = await response.json();
+        const errorMessage = errorData?.detail || 'Validation Error';
+        throw new Error(errorMessage);
       }
 
       // Handle server errors with retry logic
@@ -748,6 +750,140 @@ export const searchBooks = async (
   }
 };
 
+// Get book by ISBN
+export const getBookByIsbn = async (
+  token: string,
+  isbn: string
+): Promise<Book> => {
+  try {
+    if (!isbn || typeof isbn !== 'string' || !isbn.trim()) {
+      throw new Error('ISBN is required');
+    }
+
+    const response = await apiRequest<Book>(
+      getApiUrl(`${API_ENDPOINTS.BOOKS}/by-isbn/${encodeURIComponent(isbn.trim())}`),
+      createAuthenticatedRequest(token)
+    );
+
+    return response;
+  } catch (error) {
+    console.error('Error fetching book by ISBN:', error);
+    throw error;
+  }
+};
+
+// Get user by UID (RFID)
+export const getUserByUid = async (
+  token: string,
+  uid: string
+): Promise<User> => {
+  try {
+    if (!uid || typeof uid !== 'string' || !uid.trim()) {
+      throw new Error('UID is required');
+    }
+
+    const response = await apiRequest<User>(
+      getApiUrl(`${API_ENDPOINTS.USERS}/by-uid/${encodeURIComponent(uid.trim())}`),
+      createAuthenticatedRequest(token)
+    );
+
+    return response;
+  } catch (error) {
+    console.error('Error fetching user by UID:', error);
+    throw error;
+  }
+};
+
+// Get latest RFID scan from scanner
+export const getLatestRfidScan = async (
+  token: string
+): Promise<{ uid: string | null; timestamp: string | null; available: boolean }> => {
+  try {
+    const response = await apiRequest<{
+      uid: string | null;
+      timestamp: string | null;
+      available: boolean;
+    }>(
+      getApiUrl('/api/scan-info/latest'),
+      createAuthenticatedRequest(token)
+    );
+
+    return response;
+  } catch (error) {
+    console.error('Error fetching latest RFID scan:', error);
+    throw error;
+  }
+};
+
+// Get latest ISBN scan from barcode scanner
+export const getLatestIsbnScan = async (
+  token: string
+): Promise<{ isbn: string | null; timestamp: string | null; available: boolean }> => {
+  try {
+    const response = await apiRequest<{
+      isbn: string | null;
+      timestamp: string | null;
+      available: boolean;
+    }>(
+      getApiUrl('/api/scan-info/latest-isbn'),
+      createAuthenticatedRequest(token)
+    );
+
+    return response;
+  } catch (error) {
+    console.error('Error fetching latest ISBN scan:', error);
+    throw error;
+  }
+};
+
+// Get issued books for a specific user
+export const getUserIssuedBooks = async (
+  token: string,
+  userId: number
+): Promise<{
+  issued_books: Array<{
+    id: number;
+    isbn: string;
+    title: string;
+    author: string;
+    genre: string;
+    issued_date: string;
+    return_date: string;
+    has_pending_fine: boolean;
+    fine_amount: number;
+  }>;
+  total: number;
+}> => {
+  try {
+    if (!userId || typeof userId !== 'number' || userId <= 0) {
+      throw new Error('Valid user ID is required');
+    }
+
+    const response = await apiRequest<{
+      issued_books: Array<{
+        id: number;
+        isbn: string;
+        title: string;
+        author: string;
+        genre: string;
+        issued_date: string;
+        return_date: string;
+        has_pending_fine: boolean;
+        fine_amount: number;
+      }>;
+      total: number;
+    }>(
+      getApiUrl(`${API_ENDPOINTS.USERS}/${userId}/issued-books`),
+      createAuthenticatedRequest(token)
+    );
+
+    return response;
+  } catch (error) {
+    console.error('Error fetching user issued books:', error);
+    throw error;
+  }
+};
+
 // Rack Management Functions
 export const getRacks = async (token: string): Promise<{ racks: Rack[]; total: number }> => {
   try {
@@ -950,7 +1086,9 @@ export const returnBook = async (
     // Enhanced error handling with specific error scenarios
     if (error instanceof Error) {
       // Handle specific validation errors from backend
-      if (
+      if (error.message.includes('overdue') && error.message.includes('Pay the fine')) {
+        throw error;
+      } else if (
         error.message.includes('not issued to user') ||
         error.message.includes('not issued to this user')
       ) {

@@ -14,6 +14,8 @@ import {
   User,
   ArrowLeft,
   ArrowRight,
+  Scan,
+  AlertCircle,
 } from 'lucide-react';
 import {
   getBooks,
@@ -24,6 +26,9 @@ import {
   searchBooks,
   getRacks,
   getShelves,
+  getBookByIsbn,
+  getUserByUid,
+  getUserIssuedBooks,
 } from '../../utils/api';
 import {
   Book as BookType,
@@ -45,7 +50,17 @@ const InventoryManagement: React.FC = () => {
     bookId: '',
     userId: '',
     dueDate: '',
+    isbn: '',
+    userUid: '',
   });
+
+  // Issue form additional state
+  const [fetchedBook, setFetchedBook] = useState<BookType | null>(null);
+  const [fetchedUser, setFetchedUser] = useState<UserType | null>(null);
+  const [isbnFetchLoading, setIsbnFetchLoading] = useState(false);
+  const [userUidFetchLoading, setUserUidFetchLoading] = useState(false);
+  const [isbnFetchError, setIsbnFetchError] = useState<string | null>(null);
+  const [userUidFetchError, setUserUidFetchError] = useState<string | null>(null);
 
   // Return form data
   const [returnData, setReturnData] = useState({
@@ -53,7 +68,31 @@ const InventoryManagement: React.FC = () => {
     userId: '',
     condition: 'good',
     notes: '',
+    userUid: '',
   });
+
+  // Return form additional state
+  const [returnFetchedUser, setReturnFetchedUser] = useState<UserType | null>(null);
+  const [returnUserUidFetchLoading, setReturnUserUidFetchLoading] = useState(false);
+  const [returnUserUidFetchError, setReturnUserUidFetchError] = useState<string | null>(null);
+  const [userIssuedBooks, setUserIssuedBooks] = useState<Array<{
+    id: number;
+    isbn: string;
+    title: string;
+    author: string;
+    genre: string;
+    issued_date: string;
+    return_date: string;
+    has_pending_fine: boolean;
+    fine_amount: number;
+  }>>([]);
+  const [issuedBooksLoading, setIssuedBooksLoading] = useState(false);
+  const [selectedReturnBook, setSelectedReturnBook] = useState<{
+    id: number;
+    title: string;
+    has_pending_fine: boolean;
+    fine_amount: number;
+  } | null>(null);
 
   const { user } = useAuth();
   const [books, setBooks] = useState<BookType[]>([]);
@@ -222,28 +261,313 @@ const InventoryManagement: React.FC = () => {
   const validateIssueForm = (): { [key: string]: string } => {
     const errors: { [key: string]: string } = {};
 
-    if (!issueData.bookId) errors.bookId = 'Book selection is required';
-    if (!issueData.userId) errors.userId = 'User selection is required';
+    if (!issueData.bookId) errors.bookId = 'Book is required. Please fetch a book first.';
+    if (!issueData.userId) errors.userId = 'User is required. Please fetch user via UID.';
     if (!issueData.dueDate) errors.dueDate = 'Due date is required';
 
-    const selectedBook = books.find(b => b.id.toString() === issueData.bookId);
-    if (selectedBook && !selectedBook.is_available) {
+    if (fetchedBook && !fetchedBook.is_available) {
       errors.bookId = 'Selected book is not available';
     }
 
     return errors;
   };
 
+  // Fetch book by ISBN
+  const handleFetchBookByIsbn = async () => {
+    if (!issueData.isbn.trim()) {
+      setIsbnFetchError('Please enter an ISBN number');
+      return;
+    }
+
+    setIsbnFetchLoading(true);
+    setIsbnFetchError(null);
+    setFetchedBook(null);
+
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const book = await getBookByIsbn(token, issueData.isbn.trim());
+      setFetchedBook(book);
+      setIssueData(prev => ({ ...prev, bookId: book.id.toString() }));
+      
+      if (!book.is_available) {
+        setIsbnFetchError('This book is currently not available (already issued)');
+      }
+    } catch (err) {
+      console.error('Failed to fetch book by ISBN:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('404') || err.message.includes('not found')) {
+          setIsbnFetchError('Book not found with this ISBN');
+        } else {
+          setIsbnFetchError(err.message);
+        }
+      } else {
+        setIsbnFetchError('Failed to fetch book. Please try again.');
+      }
+      setFetchedBook(null);
+      setIssueData(prev => ({ ...prev, bookId: '' }));
+    } finally {
+      setIsbnFetchLoading(false);
+    }
+  };
+
+  // Fetch user by UID (for issue)
+  const handleFetchUserByUid = async () => {
+    if (!issueData.userUid.trim()) {
+      setUserUidFetchError('Please enter a User UID or use fetch from scanner');
+      return;
+    }
+
+    setUserUidFetchLoading(true);
+    setUserUidFetchError(null);
+    setFetchedUser(null);
+
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const user = await getUserByUid(token, issueData.userUid.trim());
+      setFetchedUser(user);
+      setIssueData(prev => ({ ...prev, userId: user.id.toString() }));
+    } catch (err) {
+      console.error('Failed to fetch user by UID:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('404') || err.message.includes('not found')) {
+          setUserUidFetchError('User not found with this UID');
+        } else {
+          setUserUidFetchError(err.message);
+        }
+      } else {
+        setUserUidFetchError('Failed to fetch user. Please try again.');
+      }
+      setFetchedUser(null);
+      setIssueData(prev => ({ ...prev, userId: '' }));
+    } finally {
+      setUserUidFetchLoading(false);
+    }
+  };
+
+  // Fetch latest RFID scan (for issue) - with polling
+  const handleFetchLatestRfidScan = async () => {
+    if (!user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    setUserUidFetchLoading(true);
+    setUserUidFetchError(null);
+    const maxAttempts = 20; // 20 attempts × 1 second = 20 seconds
+    let attempts = 0;
+
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      showNotification('success', 'Waiting for RFID scan. Please scan a card on the reader...');
+
+      const pollInterval = setInterval(async () => {
+        attempts++;
+
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/scan-info/latest`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch RFID scan');
+          }
+
+          const data = await response.json();
+
+          if (data.available && data.uid) {
+            // UID found!
+            clearInterval(pollInterval);
+            setUserUidFetchLoading(false);
+            setIssueData(prev => ({ ...prev, userUid: data.uid }));
+            showNotification('success', `UID captured: ${data.uid}`);
+
+            // Auto-fetch user with the scanned UID
+            try {
+              const userResponse = await getUserByUid(token, data.uid);
+              setFetchedUser(userResponse);
+              setIssueData(prev => ({ ...prev, userId: userResponse.id.toString(), userUid: data.uid }));
+            } catch (userErr) {
+              console.error('Failed to fetch user by UID:', userErr);
+              setUserUidFetchError('User not found with scanned UID');
+            }
+            return;
+          }
+
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setUserUidFetchLoading(false);
+            setUserUidFetchError('No RFID scan detected. Please try again.');
+            showNotification('error', 'No RFID scan detected. Please try again.');
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setUserUidFetchLoading(false);
+          setUserUidFetchError('Failed to fetch RFID scan');
+          showNotification('error', 'Failed to fetch RFID scan');
+        }
+      }, 1000); // Poll every second
+    } catch {
+      setUserUidFetchLoading(false);
+      setUserUidFetchError('Failed to initiate RFID fetch');
+      showNotification('error', 'Failed to initiate RFID fetch');
+    }
+  };
+
+  // Fetch user by UID for return modal - with polling
+  const handleReturnFetchUserByUid = async () => {
+    if (!user) {
+      showNotification('error', 'Authentication required');
+      return;
+    }
+
+    setReturnUserUidFetchLoading(true);
+    setReturnUserUidFetchError(null);
+    setReturnFetchedUser(null);
+    setUserIssuedBooks([]);
+    setSelectedReturnBook(null);
+    const maxAttempts = 20; // 20 attempts × 1 second = 20 seconds
+    let attempts = 0;
+
+    try {
+      const token = localStorage.getItem(import.meta.env.VITE_TOKEN_KEY || 'library_token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      showNotification('success', 'Waiting for RFID scan. Please scan a card on the reader...');
+
+      const pollInterval = setInterval(async () => {
+        attempts++;
+
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/scan-info/latest`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch RFID scan');
+          }
+
+          const data = await response.json();
+
+          if (data.available && data.uid) {
+            // UID found!
+            clearInterval(pollInterval);
+            setReturnData(prev => ({ ...prev, userUid: data.uid }));
+            showNotification('success', `UID captured: ${data.uid}`);
+
+            // Fetch user by UID
+            try {
+              const userResponse = await getUserByUid(token, data.uid);
+              setReturnFetchedUser(userResponse);
+              setReturnData(prev => ({ ...prev, userId: userResponse.id.toString(), userUid: data.uid }));
+
+              // Fetch issued books for this user
+              setIssuedBooksLoading(true);
+              const issuedBooksResponse = await getUserIssuedBooks(token, userResponse.id);
+              setUserIssuedBooks(issuedBooksResponse.issued_books);
+              setIssuedBooksLoading(false);
+            } catch (userErr) {
+              console.error('Failed to fetch user by UID:', userErr);
+              setReturnUserUidFetchError('User not found with scanned UID');
+            }
+            setReturnUserUidFetchLoading(false);
+            return;
+          }
+
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setReturnUserUidFetchLoading(false);
+            setReturnUserUidFetchError('No RFID scan detected. Please try again.');
+            showNotification('error', 'No RFID scan detected. Please try again.');
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setReturnUserUidFetchLoading(false);
+          setIssuedBooksLoading(false);
+          setReturnUserUidFetchError('Failed to fetch RFID scan');
+          showNotification('error', 'Failed to fetch RFID scan');
+        }
+      }, 1000); // Poll every second
+    } catch {
+      setReturnUserUidFetchLoading(false);
+      setReturnUserUidFetchError('Failed to initiate RFID fetch');
+      showNotification('error', 'Failed to initiate RFID fetch');
+    }
+  };
+
+  // Handle book selection for return
+  const handleReturnBookSelection = (bookId: string) => {
+    const selectedBook = userIssuedBooks.find(b => b.id.toString() === bookId);
+    if (selectedBook) {
+      setSelectedReturnBook({
+        id: selectedBook.id,
+        title: selectedBook.title,
+        has_pending_fine: selectedBook.has_pending_fine,
+        fine_amount: selectedBook.fine_amount,
+      });
+      setReturnData(prev => ({ ...prev, bookId }));
+    } else {
+      setSelectedReturnBook(null);
+      setReturnData(prev => ({ ...prev, bookId: '' }));
+    }
+  };
+
+  // Reset issue modal state
+  const resetIssueModal = () => {
+    setShowIssueModal(false);
+    setFormErrors({});
+    setIssueData({ bookId: '', userId: '', dueDate: '', isbn: '', userUid: '' });
+    setFetchedBook(null);
+    setFetchedUser(null);
+    setIsbnFetchError(null);
+    setUserUidFetchError(null);
+  };
+
+  // Reset return modal state
+  const resetReturnModal = () => {
+    setShowReturnModal(false);
+    setFormErrors({});
+    setReturnData({ bookId: '', userId: '', condition: 'good', notes: '', userUid: '' });
+    setReturnFetchedUser(null);
+    setUserIssuedBooks([]);
+    setSelectedReturnBook(null);
+    setReturnUserUidFetchError(null);
+  };
+
   const validateReturnForm = (): { [key: string]: string } => {
     const errors: { [key: string]: string } = {};
 
     if (!returnData.bookId) errors.bookId = 'Book selection is required';
-    if (!returnData.userId) errors.userId = 'User selection is required';
+    if (!returnData.userId) errors.userId = 'User is required. Please scan a user card.';
     if (!returnData.condition) errors.condition = 'Book condition is required';
 
-    const selectedBook = books.find(b => b.id.toString() === returnData.bookId);
-    if (selectedBook && selectedBook.is_available) {
-      errors.bookId = 'Selected book is not currently issued';
+    if (selectedReturnBook?.has_pending_fine) {
+      errors.bookId = 'Please pay the outstanding fine before returning this book';
     }
 
     return errors;
@@ -275,9 +599,7 @@ const InventoryManagement: React.FC = () => {
 
       await issueBook(token, issuePayload);
       showNotification('success', 'Book issued successfully');
-      setIssueData({ bookId: '', userId: '', dueDate: '' });
-      setFormErrors({});
-      setShowIssueModal(false);
+      resetIssueModal();
       handleRefresh();
     } catch (err) {
       console.error('Failed to issue book:', err);
@@ -334,8 +656,7 @@ const InventoryManagement: React.FC = () => {
         showNotification('success', 'Book returned successfully');
       }
 
-      setFormErrors({});
-      setShowReturnModal(false);
+      resetReturnModal();
       handleRefresh();
     } catch (err) {
       console.error('Failed to return book:', err);
@@ -715,61 +1036,146 @@ const InventoryManagement: React.FC = () => {
       {/* Issue Book Modal */}
       {showIssueModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 md:p-8 max-w-md w-full mx-4">
+          <div className="bg-white rounded-xl p-6 md:p-8 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900">Issue Book</h3>
               <button
-                onClick={() => {
-                  setShowIssueModal(false);
-                  setFormErrors({});
-                  setIssueData({ bookId: '', userId: '', dueDate: '' });
-                }}
+                onClick={resetIssueModal}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
             <div className="space-y-4">
+              {/* ISBN Input with Fetch Button */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Book</label>
-                <select
-                  value={issueData.bookId}
-                  onChange={e => setIssueData({ ...issueData, bookId: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.bookId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                >
-                  <option value="">Select a book</option>
-                  {books
-                    .filter(book => book.is_available)
-                    .map(book => (
-                      <option key={book.id} value={book.id.toString()}>
-                        {book.title} - {book.author}
-                      </option>
-                    ))}
-                </select>
-                {formErrors.bookId && (
-                  <p className="mt-1 text-red-500 text-xs">{formErrors.bookId}</p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ISBN Number</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={issueData.isbn}
+                    onChange={e => setIssueData({ ...issueData, isbn: e.target.value })}
+                    placeholder="Enter ISBN number"
+                    className={`flex-1 px-4 py-3 border ${isbnFetchError ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  />
+                  <button
+                    onClick={handleFetchBookByIsbn}
+                    disabled={isbnFetchLoading || !issueData.isbn.trim()}
+                    className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+                  >
+                    {isbnFetchLoading ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                    <span>Fetch</span>
+                  </button>
+                </div>
+                {isbnFetchError && (
+                  <p className="mt-1 text-red-500 text-xs flex items-center">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    {isbnFetchError}
+                  </p>
                 )}
               </div>
+
+              {/* Book Details Display */}
+              {fetchedBook && (
+                <div className={`p-4 rounded-lg border ${fetchedBook.is_available ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className="flex items-start space-x-3">
+                    <Book className={`w-5 h-5 mt-0.5 ${fetchedBook.is_available ? 'text-green-600' : 'text-red-600'}`} />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{fetchedBook.title}</p>
+                      <p className="text-sm text-gray-600">by {fetchedBook.author}</p>
+                      <p className="text-xs text-gray-500">Genre: {fetchedBook.genre}</p>
+                      <div className={`mt-2 inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                        fetchedBook.is_available 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {fetchedBook.is_available ? (
+                          <>
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Available
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Not Available (Issued)
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* User UID Input - Only enabled when book is available */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select User</label>
-                <select
-                  value={issueData.userId}
-                  onChange={e => setIssueData({ ...issueData, userId: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.userId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                >
-                  <option value="">Select a user</option>
-                  {users
-                    .filter(user => user.role === 'user')
-                    .map(user => (
-                      <option key={user.id} value={user.id.toString()}>
-                        {user.name} ({user.usn})
-                      </option>
-                    ))}
-                </select>
-                {formErrors.userId && (
-                  <p className="mt-1 text-red-500 text-xs">{formErrors.userId}</p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">User UID</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={issueData.userUid}
+                    onChange={e => setIssueData({ ...issueData, userUid: e.target.value })}
+                    placeholder="Enter User UID or scan card"
+                    disabled={!fetchedBook?.is_available}
+                    className={`flex-1 px-4 py-3 border ${userUidFetchError ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed`}
+                  />
+                  <button
+                    onClick={handleFetchUserByUid}
+                    disabled={userUidFetchLoading || !fetchedBook?.is_available || !issueData.userUid.trim()}
+                    className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+                    title="Fetch by entered UID"
+                  >
+                    {userUidFetchLoading ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={handleFetchLatestRfidScan}
+                    disabled={userUidFetchLoading || !fetchedBook?.is_available}
+                    className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2"
+                    title="Fetch from RFID Scanner"
+                  >
+                    {userUidFetchLoading ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Scan className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                {!fetchedBook?.is_available && fetchedBook && (
+                  <p className="mt-1 text-amber-600 text-xs flex items-center">
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    User selection disabled until an available book is fetched
+                  </p>
+                )}
+                {userUidFetchError && (
+                  <p className="mt-1 text-red-500 text-xs flex items-center">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    {userUidFetchError}
+                  </p>
                 )}
               </div>
+
+              {/* User Details Display */}
+              {fetchedUser && (
+                <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+                  <div className="flex items-start space-x-3">
+                    <User className="w-5 h-5 mt-0.5 text-blue-600" />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{fetchedUser.name}</p>
+                      <p className="text-sm text-gray-600">USN: {fetchedUser.usn}</p>
+                      <p className="text-xs text-gray-500">Email: {fetchedUser.email}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Due Date */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
                 <input
@@ -777,7 +1183,8 @@ const InventoryManagement: React.FC = () => {
                   value={issueData.dueDate}
                   onChange={e => setIssueData({ ...issueData, dueDate: e.target.value })}
                   min={new Date().toISOString().split('T')[0]}
-                  className={`w-full px-4 py-3 border ${formErrors.dueDate ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  disabled={!fetchedBook?.is_available || !fetchedUser}
+                  className={`w-full px-4 py-3 border ${formErrors.dueDate ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed`}
                 />
                 {formErrors.dueDate && (
                   <p className="mt-1 text-red-500 text-xs">{formErrors.dueDate}</p>
@@ -786,18 +1193,14 @@ const InventoryManagement: React.FC = () => {
             </div>
             <div className="flex justify-end space-x-3 mt-6">
               <button
-                onClick={() => {
-                  setShowIssueModal(false);
-                  setFormErrors({});
-                  setIssueData({ bookId: '', userId: '', dueDate: '' });
-                }}
+                onClick={resetIssueModal}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Cancel
               </button>
               <button
                 onClick={handleIssueBook}
-                disabled={isOperationLoading}
+                disabled={isOperationLoading || !fetchedBook?.is_available || !fetchedUser || !issueData.dueDate}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
               >
                 {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
@@ -811,61 +1214,120 @@ const InventoryManagement: React.FC = () => {
       {/* Return Book Modal */}
       {showReturnModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 md:p-8 max-w-md w-full mx-4">
+          <div className="bg-white rounded-xl p-6 md:p-8 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900">Return Book</h3>
               <button
-                onClick={() => {
-                  setShowReturnModal(false);
-                  setFormErrors({});
-                  setReturnData({ bookId: '', userId: '', condition: 'good', notes: '' });
-                }}
+                onClick={resetReturnModal}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
             <div className="space-y-4">
+              {/* Fetch User by RFID Scan */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Book</label>
-                <select
-                  value={returnData.bookId}
-                  onChange={e => setReturnData({ ...returnData, bookId: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.bookId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
-                >
-                  <option value="">Select a book</option>
-                  {books
-                    .filter(book => !book.is_available)
-                    .map(book => (
+                <label className="block text-sm font-medium text-gray-700 mb-2">Scan User Card</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={returnData.userUid}
+                    onChange={e => setReturnData({ ...returnData, userUid: e.target.value })}
+                    placeholder="User UID will appear after scan"
+                    readOnly
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-gray-50"
+                  />
+                  <button
+                    onClick={handleReturnFetchUserByUid}
+                    disabled={returnUserUidFetchLoading}
+                    className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2"
+                    title="Fetch from RFID Scanner"
+                  >
+                    {returnUserUidFetchLoading ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Scan className="w-4 h-4" />
+                    )}
+                    <span>Fetch</span>
+                  </button>
+                </div>
+                {returnUserUidFetchError && (
+                  <p className="mt-1 text-red-500 text-xs flex items-center">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    {returnUserUidFetchError}
+                  </p>
+                )}
+              </div>
+
+              {/* User Details Display */}
+              {returnFetchedUser && (
+                <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+                  <div className="flex items-start space-x-3">
+                    <User className="w-5 h-5 mt-0.5 text-blue-600" />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{returnFetchedUser.name}</p>
+                      <p className="text-sm text-gray-600">USN: {returnFetchedUser.usn}</p>
+                      <p className="text-xs text-gray-500">Email: {returnFetchedUser.email}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Select Book from User's Issued Books */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Book to Return
+                </label>
+                {issuedBooksLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader className="w-5 h-5 animate-spin text-gray-400" />
+                    <span className="ml-2 text-sm text-gray-500">Loading issued books...</span>
+                  </div>
+                ) : userIssuedBooks.length > 0 ? (
+                  <select
+                    value={returnData.bookId}
+                    onChange={e => handleReturnBookSelection(e.target.value)}
+                    className={`w-full px-4 py-3 border ${formErrors.bookId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
+                  >
+                    <option value="">Select a book</option>
+                    {userIssuedBooks.map(book => (
                       <option key={book.id} value={book.id.toString()}>
                         {book.title} - {book.author}
+                        {book.has_pending_fine ? ` (Fine: ₹${book.fine_amount})` : ''}
                       </option>
                     ))}
-                </select>
+                  </select>
+                ) : returnFetchedUser ? (
+                  <div className="text-center py-4 text-gray-500 text-sm">
+                    No issued books found for this user
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-400 text-sm">
+                    Scan a user card to see their issued books
+                  </div>
+                )}
                 {formErrors.bookId && (
                   <p className="mt-1 text-red-500 text-xs">{formErrors.bookId}</p>
                 )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select User</label>
-                <select
-                  value={returnData.userId}
-                  onChange={e => setReturnData({ ...returnData, userId: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.userId ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
-                >
-                  <option value="">Select a user</option>
-                  {users
-                    .filter(user => user.role === 'user')
-                    .map(user => (
-                      <option key={user.id} value={user.id.toString()}>
-                        {user.name} ({user.usn})
-                      </option>
-                    ))}
-                </select>
-                {formErrors.userId && (
-                  <p className="mt-1 text-red-500 text-xs">{formErrors.userId}</p>
-                )}
-              </div>
+
+              {/* Fine Warning */}
+              {selectedReturnBook?.has_pending_fine && (
+                <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg">
+                  <div className="flex">
+                    <AlertTriangle className="w-5 h-5 text-red-400 mr-2 flex-shrink-0" />
+                    <div className="text-sm text-red-800">
+                      <p className="font-medium">Outstanding Fine</p>
+                      <p className="mt-1">
+                        This book has an outstanding fine of ₹{selectedReturnBook.fine_amount}. 
+                        Please pay the fine before returning the book.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Book Condition */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Book Condition
@@ -873,7 +1335,8 @@ const InventoryManagement: React.FC = () => {
                 <select
                   value={returnData.condition}
                   onChange={e => setReturnData({ ...returnData, condition: e.target.value })}
-                  className={`w-full px-4 py-3 border ${formErrors.condition ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
+                  disabled={!selectedReturnBook || selectedReturnBook.has_pending_fine}
+                  className={`w-full px-4 py-3 border ${formErrors.condition ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed`}
                 >
                   <option value="good">Good</option>
                   <option value="fair">Fair</option>
@@ -884,6 +1347,8 @@ const InventoryManagement: React.FC = () => {
                   <p className="mt-1 text-red-500 text-xs">{formErrors.condition}</p>
                 )}
               </div>
+
+              {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Notes (Optional)
@@ -892,11 +1357,14 @@ const InventoryManagement: React.FC = () => {
                   value={returnData.notes}
                   onChange={e => setReturnData({ ...returnData, notes: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                  disabled={!selectedReturnBook || selectedReturnBook.has_pending_fine}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                   placeholder="Any additional notes about the book condition..."
                 />
               </div>
-              {(returnData.condition === 'damaged' || returnData.condition === 'lost') && (
+
+              {/* Condition Warning */}
+              {(returnData.condition === 'damaged' || returnData.condition === 'lost') && !selectedReturnBook?.has_pending_fine && (
                 <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-lg">
                   <div className="flex">
                     <AlertTriangle className="w-5 h-5 text-amber-400 mr-2 flex-shrink-0" />
@@ -914,18 +1382,14 @@ const InventoryManagement: React.FC = () => {
             </div>
             <div className="flex justify-end space-x-3 mt-6">
               <button
-                onClick={() => {
-                  setShowReturnModal(false);
-                  setFormErrors({});
-                  setReturnData({ bookId: '', userId: '', condition: 'good', notes: '' });
-                }}
+                onClick={resetReturnModal}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
               >
                 Cancel
               </button>
               <button
                 onClick={handleReturnBook}
-                disabled={isOperationLoading}
+                disabled={isOperationLoading || !selectedReturnBook || selectedReturnBook.has_pending_fine}
                 className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center space-x-2"
               >
                 {isOperationLoading && <Loader className="w-4 h-4 animate-spin" />}
