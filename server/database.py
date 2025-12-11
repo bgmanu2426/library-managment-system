@@ -6,6 +6,11 @@ import os
 # Database URL configuration (read from environment, or from local)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./library.db")
 
+# Ensure database file path exists for SQLite
+if DATABASE_URL.startswith("sqlite"):
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
+
 # Create SQLite engine
 engine = create_engine(
     DATABASE_URL, 

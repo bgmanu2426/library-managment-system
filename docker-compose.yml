@@ -8,11 +8,14 @@ services:
     container_name: lms-server
     env_file:
       - ./server/.env
+    environment:
+      - DATABASE_URL=sqlite:///./library.db
     ports:
       - "8000:8000"
     volumes:
       - shared_data:/shared
       - server_logs:/app/logs
+      - ./server/library.db:/app/library.db
     restart: unless-stopped
 
   client:
