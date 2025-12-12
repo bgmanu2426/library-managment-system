@@ -75,9 +75,12 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, setCurrentPage }
       setNotifLoading(true);
       setNotifError(null);
       try {
+        const shouldFetchFines = user.role === 'admin';
         const [stats, finesResult, currentBooksResult] = await Promise.all([
           getUserDashboardStats(token).catch(() => null),
-          getFines(token, 'pending').catch(() => ({ fines: [] }) as { fines: FineResponse[] }),
+          shouldFetchFines
+            ? getFines(token, 'pending').catch(() => ({ fines: [] }) as { fines: FineResponse[] })
+            : Promise.resolve({ fines: [] } as { fines: FineResponse[] }),
           getCurrentBooks(token).catch(() => ({ books: [] })),
         ]);
 

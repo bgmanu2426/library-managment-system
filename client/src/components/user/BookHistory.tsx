@@ -68,27 +68,23 @@ const BookHistory: React.FC = () => {
 
         const transactions = response.history || [];
 
+        const mergedHistory =
+          page === 0 ? transactions : [...userHistory, ...transactions];
+
         // Update state based on whether we're loading more or fresh data
-        if (page === 0) {
-          setUserHistory(transactions);
-        } else {
-          setUserHistory(prev => [...prev, ...transactions]);
-        }
+        setUserHistory(mergedHistory);
 
         // Update pagination info
         setTotalRecords(response.total || 0);
         setHasMore(transactions.length === limit && (page + 1) * limit < (response.total || 0));
 
-        // Calculate statistics from all transactions
-        const allTransactions = page === 0 ? transactions : [...userHistory, ...transactions];
-
-        // Get fresh stats by counting from the response data
+        // Get fresh stats by counting from merged history
         const statsData = {
           total: response.total || 0,
-          current: allTransactions.filter(r => r.status === 'current').length,
-          returned: allTransactions.filter(r => r.status === 'returned').length,
-          overdue: allTransactions.filter(r => r.status === 'overdue').length,
-          totalFines: allTransactions.reduce((sum, r) => sum + (r.fine_amount || 0), 0),
+          current: mergedHistory.filter(r => r.status === 'current').length,
+          returned: mergedHistory.filter(r => r.status === 'returned').length,
+          overdue: mergedHistory.filter(r => r.status === 'overdue').length,
+          totalFines: mergedHistory.reduce((sum, r) => sum + (r.fine_amount || 0), 0),
         };
 
         setStats(statsData);
@@ -107,7 +103,7 @@ const BookHistory: React.FC = () => {
     };
 
     fetchBookHistory();
-  }, [user, page, limit, filterStatus, refreshKey, userHistory]);
+  }, [user, page, limit, filterStatus, refreshKey]);
 
   // Auto-refresh every 30 seconds for current books
   useEffect(() => {
