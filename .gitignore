@@ -178,7 +178,6 @@ dist/
 .env.production.local
 
 # SQLite databases
-*.db
 *.sqlite
 *.sqlite3
 
@@ -236,7 +235,3 @@ __pycache__/
 .pytest_cache/
 .coverage
 .nyc_output/
-
-# Application specific
-library.db
-.clackyai/
